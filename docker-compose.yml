@@ -1,0 +1,18 @@
+version: "3.8"
+services:
+    nethermind:
+      image: nethermind/nethermind:latest
+      container_name: nethermind
+      volumes:
+        - /home/ferru97/Master-Thesis/rinkeby.cfg:/nethermind/configs/rinkeby.cfg
+      networks:
+        - eth_network
+      ports:
+        - 8545:8545
+
+volumes:
+  eth_data:
+     name: eth_data
+networks:
+  eth_network:
+     name: eth_network
