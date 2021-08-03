@@ -3,7 +3,7 @@ services:
     geth:
       build:
         context: geth/
-        dockerfile: Dockerfile
+        dockerfile: geth/Dockerfile
       image: geth
       container_name: geth
       volumes:
@@ -15,6 +15,17 @@ services:
         - 8546:8546
         - 8547:8547
         - 30303:30303
+        
+    postgres:
+      image: postgres
+      container_name: postgres
+      env_file: .env
+      environment:
+        -POSTGRES_USER=$POSTGRES_USER
+        -POSTGRES_PASSWORD=$POSTGRES_PASSWORD
+        -POSTGRES_DB=$POSTGRES_DB
+      volumes:
+        - /mnt/hdd/db_data:/var/lib/postgresql/data/
 
 volumes:
   eth_data:
