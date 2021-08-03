@@ -1,7 +1,10 @@
 version: "3.8"
 services:
     geth:
-      image: ethereum/client-go
+      build:
+        context: geth/
+        dockerfile: Dockerfile
+      image: geth
       container_name: geth
       volumes:
         - /mnt/hdd/geth_data:/root/.ethereum
@@ -12,7 +15,6 @@ services:
         - 8546:8546
         - 8547:8547
         - 30303:30303
-      command: geth --rinkeby --syncmode "light"
 
 volumes:
   eth_data:
