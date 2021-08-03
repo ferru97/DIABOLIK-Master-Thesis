@@ -1,14 +1,18 @@
 version: "3.8"
 services:
-    nethermind:
-      image: nethermind/nethermind:latest
-      container_name: nethermind
+    geth:
+      image: ethereum/client-go
+      container_name: geth
       volumes:
-        - /home/ferru97/Master-Thesis/rinkeby.cfg:/nethermind/configs/rinkeby.cfg
+        - /mnt/hdd/geth_data:/root/.ethereum
       networks:
         - eth_network
       ports:
         - 8545:8545
+        - 8546:8546
+        - 8547:8547
+        - 30303:30303
+      command: geth --rinkeby --syncmode "light"
 
 volumes:
   eth_data:
