@@ -37,7 +37,7 @@ services:
       image: smartcontract/chainlink:0.10.10
       container_name: chainlink_node
       build:
-        contaxt: chainlink-rinkeby/
+        context: chainlink-rinkeby/
       env_file: .env
       ports:
         - 6688:6688
