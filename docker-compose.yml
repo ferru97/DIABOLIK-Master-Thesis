@@ -30,6 +30,21 @@ services:
         - /mnt/hdd/db_data:/var/lib/postgresql/data/
       networks:
         - eth_network
+        
+    chainlink_node:
+      image: smartcontract/chainlink:0.10.10
+      container_name: chainlink_node
+      build:
+        contaxt: chainlink-rinkeby/
+      env_file: .env
+      ports:
+        - 6688:6688
+      volumes:
+        - /mnt/hdd/chainlink_data:/chainlink
+      depends_on:
+        - postgres
+      networks:
+        - eth_network
 
 volumes:
   eth_data:
