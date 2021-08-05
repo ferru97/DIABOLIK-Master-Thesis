@@ -1,54 +1,66 @@
-version: "3.8"
+version: "2"
+
 services:
-
-    geth:
-      build:
-        context: geth/
-        dockerfile: Dockerfile
-      image: geth
-      container_name: geth
-      volumes:
-        - /mnt/hdd/geth_data:/root/.ethereum
-      networks:
-        - eth_network
-      ports:
-        - 8545:8545
-        - 8546:8546
-        - 8547:8547
-        - 30303:30303
+  postgres:
+    image: postgres
+    container_name: postgres
+    env_file: postgres.env
+    ports:
+      - 5432:5432
+    volumes:
+      - /var/lib/postgresql/data
+    restart: unless-stopped
         
-    postgres:
-      image: postgres
-      container_name: postgres
-      env_file: .env
-      environment:
-        - POSTGRES_USER=$POSTGRES_USER
-        - POSTGRES_PASSWORD=$POSTGRES_PASSWORD
-        - POSTGRES_DB=$POSTGRES_DB
-        - PGDATA=/tmp
-      ports:
-        - 5432:5432
-      volumes:
-        - /mnt/hdd/db_data:/var/lib/postgresql/data/
-      networks:
-        - eth_network
-        
-    chainlink_node:
-      image: smartcontract/chainlink:0.10.10
-      container_name: chainlink_node
-      env_file: chainlink-rinkeby/.env
-      ports:
-        - 6688:6688
-      volumes:
-        - /mnt/hdd/chainlink_data:/chainlink
-      depends_on:
-        - postgres
-      networks:
-        - eth_network
+  geth:
+    build:
+      context: geth/
+      dockerfile: Dockerfile
+    image: geth
+    container_name: geth
+    volumes:
+      - geth-data:/root/.ethereum
+    expose:
+      - "8545"
+      - "8546"
+      - "8547"
+      - "30303"
+    restart: unless-stopped
 
+  chainlink_node:      
+    image: smartcontract/chainlink:latest
+    container_name: chainlink_node
+    command: ["local", "n", "-p", "/chainlink/.password", "-a", "/chainlink/.api"]
+    env_file:
+      - ./chainlink.env
+    ports:
+      - 6688:6688
+    volumes:
+      - chainlink-data:/chainlink
+    links:
+      - "geth"
+      - "postgres"
+    restart: unless-stopped
+    
+    
 volumes:
-  eth_data:
-     name: eth_data
-networks:
-  eth_network:
-     name: eth_network
+  geth-data:
+    driver: local
+    driver_opts:
+      type: 'none'
+      o: 'bind'
+      device: '/mnt/hdd/docker_volumes/geth-data'
+      
+  db-data:
+    driver: local
+    driver_opts:
+      type: 'none'
+      o: 'bind'
+      device: '/mnt/hdd/docker_volumes/db-data'
+  
+  chainlink-data:
+    driver: local
+    driver_opts:
+      type: 'none'
+      o: 'bind'
+      device: '/mnt/hdd/docker_volumes/chainlink'
+      

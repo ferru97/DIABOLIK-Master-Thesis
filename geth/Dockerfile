@@ -16,4 +16,4 @@ RUN apt-get install software-properties-common -y
 RUN add-apt-repository -y ppa:ethereum/ethereum
 RUN apt-get install ethereum -y
 
-CMD geth --rinkeby --syncmode "light"
+CMD geth --rpc --rpcaddr 0.0.0.0 --rinkeby --syncmode "light" --ws --ws.port 8546 --ws.api eth,net,web3 --ws.origins '*' --ws.addr 0.0.0.0
