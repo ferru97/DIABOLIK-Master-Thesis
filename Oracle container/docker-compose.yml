@@ -8,7 +8,7 @@ services:
     ports:
       - 5432:5432
     volumes:
-      - /var/lib/postgresql/data
+      - db-data:/var/lib/postgresql/data
     restart: unless-stopped
         
   geth:
@@ -27,7 +27,7 @@ services:
     restart: unless-stopped
 
   chainlink_node:      
-    image: smartcontract/chainlink:latest
+    image: smartcontract/chainlink:0.10.11
     container_name: chainlink_node
     command: ["local", "n", "-p", "/chainlink/.password", "-a", "/chainlink/.api"]
     env_file:
@@ -48,19 +48,19 @@ volumes:
     driver_opts:
       type: 'none'
       o: 'bind'
-      device: '/mnt/hdd/docker_volumes/geth-data'
+      device: './volumes/geth-data'
       
   db-data:
     driver: local
     driver_opts:
       type: 'none'
       o: 'bind'
-      device: '/mnt/hdd/docker_volumes/db-data'
+      device: './volumes/db-data'
   
   chainlink-data:
     driver: local
     driver_opts:
       type: 'none'
       o: 'bind'
-      device: '/mnt/hdd/docker_volumes/chainlink'
+      device: './volumes/chainlink'
       

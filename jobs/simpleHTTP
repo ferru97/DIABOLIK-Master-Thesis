@@ -1,0 +1,18 @@
+{
+  "initiators": [
+    {
+      "type": "RunLog",
+      "params": { "address": "0x2DC325bA1cFADE462A08AB6033d6a72C74234130" }
+    }
+  ],
+  "tasks": [
+    {
+      "type": "HTTPGet",
+      "confirmations": 0,
+      "params": { "get": "https://www.random.org/integers/?num=1&col=1&base=10&format=plain&rnd=new&min=10&max=100" }
+    },
+    { "type": "EthBytes32" },
+    { "type": "EthTx" }
+  ],
+  "minPayment": "1000000000000000000"
+}
