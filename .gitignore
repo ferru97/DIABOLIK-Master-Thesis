@@ -1,1 +1,6 @@
-Oracle container/volumes/*
+oracle_container/volumes/geth-data/rinkeby
+oracle_container/volumes/db-data/pgdata
+oracle_container/volumes/chainlink/cookie
+oracle_container/volumes/chainlink/log.jsonl
+oracle_container/volumes/chainlink/secret
+
