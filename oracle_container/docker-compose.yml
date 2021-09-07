@@ -27,7 +27,7 @@ services:
     restart: unless-stopped
 
   chainlink_node:      
-    image: smartcontract/chainlink:0.10.11
+    image: smartcontract/chainlink:0.10.14
     container_name: chainlink_node
     command: ["local", "n", "-p", "/chainlink/.password", "-a", "/chainlink/.api"]
     env_file:
