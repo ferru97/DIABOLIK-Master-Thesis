@@ -1,6 +1,6 @@
 const {LinkToken}  = require('@chainlink/contracts/truffle/v0.4/LinkToken')
 
-const LINK_ADDRESS = "0xb879A3417473aC9ECC54A703Af5bb56bEb2C065D"
+const LINK_ADDRESS = "0xB20031282bedadA606AC55F2904ff838337e5Ef9"
 const ONE_LINK = "1000000000000000000"
 
 
@@ -29,7 +29,7 @@ module.exports = async function(callback) {
             console.log("ETH:",balance_eth)
             console.log("LINK:",balance_link)
             break;
-        case ("fund" && process.argv.length>8):
+        case "fund":
             if(process.argv[7]==undefined || process.argv[8]==undefined){
                 console.log("Error: provide the source and destination address")
                 return

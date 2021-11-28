@@ -1,45 +1,224 @@
 version: "2"
 
 services:
+
   postgres:
-    image: postgres
+    image: postgres:13
     container_name: postgres
     env_file: postgres.env
     ports:
       - 5432:5432
     volumes:
-      - db-data:/var/lib/postgresql/data
+      - ./volumes/db-data:/var/lib/postgresql/data
     restart: unless-stopped
+    networks:
+      chainlink_net:
+        ipv4_address: 10.5.0.2
         
-  geth:
-    build:
-      context: geth/
-      dockerfile: Dockerfile
-    image: geth
-    container_name: geth
-    volumes:
-      - geth-data:/root/.ethereum
-    expose:
-      - "8545"
-      - "8546"
-      - "8547"
-      - "30303"
-    restart: unless-stopped
+#  geth:
+#    build:
+#      context: geth/
+#      dockerfile: Dockerfile
+#    image: geth
+#    container_name: geth
+#    volumes:
+#      - ./volumes/geth-data:/root/.ethereum
+#    expose:
+#      - "8545"
+#      - "8546"
+#      - "8547"
+#      - "30303"
+#    restart: unless-stopped
+#    networks:
+#      chainlink_net:
+#        ipv4_address: 10.5.0.9
 
-  chainlink_node:      
-    image: smartcontract/chainlink:0.10.14
-    container_name: chainlink_node
+  chainlink_node1:      
+    image: smartcontract/chainlink:1.0.0
+    container_name: chainlink_node1
     command: ["local", "n", "-p", "/chainlink/.password", "-a", "/chainlink/.api"]
     env_file:
       - ./chainlink.env
+    environment:
+      - DATABASE_URL=postgresql://chainlink:chainlink123@postgres:5432/chainlink?sslmode=disable
+      - PEER_ID=p2p_12D3KooWALTnn7MtMcwhvYbZ4m5W6f7pKDFJGjHnQJyGX1d4RUHe
     ports:
       - 6688:6688
     volumes:
-      - chainlink-data:/chainlink
+      - ./volumes/chainlink1:/chainlink
+      - ./scripts/chainlink_login.sh:/home/root/chainlink_login.sh
+      - ./scripts/chainlink_delete_job.sh:/home/root/chainlink_delete_job.sh
+      - ./scripts/jobs/job_oracle_1.toml:/home/root/job.toml
     links:
-      - "geth"
+      #- "geth"
       - "postgres"
     restart: unless-stopped
+    networks:
+      chainlink_net:
+        ipv4_address: 10.5.0.3
+
+  chainlink_node2:      
+    image: smartcontract/chainlink:1.0.0
+    container_name: chainlink_node2
+    command: ["local", "n", "-p", "/chainlink/.password", "-a", "/chainlink/.api"]
+    env_file:
+      - ./chainlink.env
+    environment:
+      - DATABASE_URL=postgresql://chainlink:chainlink123@postgres:5432/chainlink2?sslmode=disable
+      - CHAINLINK_PORT=6689
+      - CLIENT_NODE_URL=http://localhost:6689
+    ports:
+      - 6689:6689
+    volumes:
+      - ./volumes/chainlink2:/chainlink
+      - ./scripts/chainlink_login.sh:/home/root/chainlink_login.sh
+      - ./scripts/chainlink_delete_job.sh:/home/root/chainlink_delete_job.sh
+      - ./scripts/jobs/job_oracle_2.toml:/home/root/job.toml
+    links:
+      #- "geth"
+      - "postgres"
+    restart: unless-stopped
+    networks:
+      chainlink_net:
+        ipv4_address: 10.5.0.4
+    
+  chainlink_node3:      
+    image: smartcontract/chainlink:1.0.0
+    container_name: chainlink_node3
+    command: ["local", "n", "-p", "/chainlink/.password", "-a", "/chainlink/.api"]
+    env_file:
+      - ./chainlink.env
+    environment:
+      - DATABASE_URL=postgresql://chainlink:chainlink123@postgres:5432/chainlink3?sslmode=disable
+      - CHAINLINK_PORT=6690
+      - CLIENT_NODE_URL=http://localhost:6690
+    ports:
+      - 6690:6690
+    volumes:
+      - ./volumes/chainlink3:/chainlink
+      - ./scripts/chainlink_login.sh:/home/root/chainlink_login.sh
+      - ./scripts/chainlink_delete_job.sh:/home/root/chainlink_delete_job.sh
+      - ./scripts/jobs/job_oracle_3.toml:/home/root/job.toml
+    links:
+      #- "geth"
+      - "postgres"
+    restart: unless-stopped
+    networks:
+      chainlink_net:
+        ipv4_address: 10.5.0.5
+        
+        
+  chainlink_node4:      
+    image: smartcontract/chainlink:1.0.0
+    container_name: chainlink_node4
+    command: ["local", "n", "-p", "/chainlink/.password", "-a", "/chainlink/.api"]
+    env_file:
+      - ./chainlink.env
+    environment:
+      - DATABASE_URL=postgresql://chainlink:chainlink123@postgres:5432/chainlink4?sslmode=disable
+      - CHAINLINK_PORT=6691
+      - CLIENT_NODE_URL=http://localhost:6691
+    ports:
+      - 6691:6691
+    volumes:
+      - ./volumes/chainlink4:/chainlink
+      - ./scripts/chainlink_login.sh:/home/root/chainlink_login.sh
+      - ./scripts/chainlink_delete_job.sh:/home/root/chainlink_delete_job.sh
+      - ./scripts/jobs/job_oracle_4.toml:/home/root/job.toml
+    links:
+      #- "geth"
+      - "postgres"
+    restart: unless-stopped
+    networks:
+      chainlink_net:
+        ipv4_address: 10.5.0.7
+        
+        
+  chainlink_node5:      
+    image: smartcontract/chainlink:1.0.0
+    container_name: chainlink_node5
+    command: ["local", "n", "-p", "/chainlink/.password", "-a", "/chainlink/.api"]
+    env_file:
+      - ./chainlink.env
+    environment:
+      - DATABASE_URL=postgresql://chainlink:chainlink123@postgres:5432/chainlink5?sslmode=disable
+      - CHAINLINK_PORT=6692
+      - CLIENT_NODE_URL=http://localhost:6692
+    ports:
+      - 6692:6692
+    volumes:
+      - ./volumes/chainlink5:/chainlink
+      - ./scripts/chainlink_login.sh:/home/root/chainlink_login.sh
+      - ./scripts/chainlink_delete_job.sh:/home/root/chainlink_delete_job.sh
+      - ./scripts/jobs/bootstrap.toml:/home/root/job.toml
+    links:
+      #- "geth"
+      - "postgres"
+    restart: unless-stopped
+    networks:
+      chainlink_net:
+        ipv4_address: 10.5.0.8
+        
+        
+
+
+  geth:
+    image: ethereum/client-go:v1.10.10
+    command: --datadir=/root/.ethereum/devchain --datadir.ancient=/root/.ethereum/devchain --datadir.minfreedisk=0 --nodekeyhex=091bd6067cb4612df85d9c1ff85cc47f259ced4d4cd99816b14f35650f59c322 --http.api "db,personal,eth,net,web3,debug,txpool" --http.corsdomain='*' --ws.api "db,personal,eth,net,web3,debug,txpool" --ws.origins='*' --networkid=1337 --http --ws --mine --http.addr="0.0.0.0" --ws.addr="0.0.0.0" --dev --dev.period 1 --allow-insecure-unlock
+    volumes:
+      - ./volumes/geth:/root/.ethereum/devchain
+    ports:
+      - "30303:30303"
+      - "30303:30303/udp"
+      - "8545:8545"
+      - "8546:8546"
+    networks:
+      chainlink_net:
+        ipv4_address: 10.5.0.20
+
+
+#  explorer:
+#    build:
+#      context: ./blockscout
+#      dockerfile: DockerfileExplorer
+#    restart: "no"
+#    tty: true
+#    environment:
+#      - ETHEREUM_JSONRPC_VARIANT=geth	
+#      - DATABASE_URL=postgresql://chainlink:chainlink123@postgres:5432/blockscout?sslmode=disable
+#      - ETHEREUM_JSONRPC_HTTP_URL=http://10.5.0.20:8545
+#      - ETHEREUM_JSONRPC_WS_URL=ws://10.5.0.20:8546 
+#    ports:
+#      - "4000:4000"
+#    depends_on:
+#      - postgres
+#    networks:
+#      chainlink_net:
+#        ipv4_address: 10.5.0.21
+   
+        
+#  chainlink_node6:      
+#    image: smartcontract/chainlink:0.10.4
+#    container_name: chainlink_node6
+#    command: ["local", "n", "-p", "/chainlink/.password", "-a", "/chainlink/.api"]
+#    env_file:
+#      - ./chainlink.env
+#    environment:
+#      - DATABASE_URL=postgresql://chainlink:chainlink123@postgres:5432/chainlink66?sslmode=disable
+#      - CHAINLINK_PORT=6693
+#      - CLIENT_NODE_URL=http://localhost:6693
+#    ports:
+#      - 6693:6693
+#    volumes:
+#      - ./volumes/chainlink6:/chainlink
+#    links:
+#      #- "geth"
+#      - "postgres"
+#    restart: unless-stopped
+#    networks:
+#      chainlink_net:
+#        ipv4_address: 10.5.0.12        
+        
     
   web_server:
     build:
@@ -50,27 +229,17 @@ services:
     ports:
       - "3000:3000"
     restart: unless-stopped
+    networks:
+      chainlink_net:
+        ipv4_address: 10.5.0.6
     
-    
-volumes:
-  geth-data:
-    driver: local
-    driver_opts:
-      type: 'none'
-      o: 'bind'
-      device: './volumes/geth-data'
+
       
-  db-data:
-    driver: local
-    driver_opts:
-      type: 'none'
-      o: 'bind'
-      device: './volumes/db-data'
-  
-  chainlink-data:
-    driver: local
-    driver_opts:
-      type: 'none'
-      o: 'bind'
-      device: './volumes/chainlink'
+networks:
+  chainlink_net:
+    driver: bridge
+    ipam:
+     config:
+       - subnet: 10.5.0.0/16
+         gateway: 10.5.0.1
       

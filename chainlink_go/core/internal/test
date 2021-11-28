@@ -1,0 +1,430 @@
+package main
+
+import (
+	"fmt"
+	"reflect"
+	"strings"
+	"time"
+	"crypto/aes"
+
+	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/pkg/errors"
+	"github.com/smartcontractkit/libocr/offchainreporting/types"
+
+
+	"github.com/ethereum/go-ethereum/crypto"
+	"golang.org/x/crypto/curve25519"
+)
+
+
+const setConfigEncodedComponentsABI = `[
+  {
+    "name": "setConfigEncodedComponents",
+    "type": "tuple",
+    "components": [
+      {
+        "name": "deltaProgress",
+        "type": "int64"
+      },
+      {
+        "name": "deltaResend",
+        "type": "int64"
+      },
+      {
+        "name": "deltaRound",
+        "type": "int64"
+      },
+      {
+        "name": "deltaGrace",
+        "type": "int64"
+      },
+      {
+        "name": "deltaC",
+        "type": "int64"
+      },
+      {
+        "name": "alphaPPB",
+        "type": "uint64"
+      },
+      {
+        "name": "deltaStage",
+        "type": "int64"
+      },
+      {
+        "name": "rMax",
+        "type": "uint8"
+      },
+      {
+        "name": "s",
+        "type": "uint8[]"
+      },
+      {
+        "name": "offchainPublicKeys",
+        "type": "bytes32[]"
+      },
+      {
+        "name": "peerIDs",
+        "type": "string"
+      },
+      {
+        "name": "sharedSecretEncryptions",
+        "type": "tuple",
+        "components": [
+          {
+            "name": "diffieHellmanPoint",
+            "type": "bytes32"
+          },
+          {
+            "name": "sharedSecretHash",
+            "type": "bytes32"
+          },
+          {
+            "name": "encryptions",
+            "type": "bytes16[]"
+          }
+        ]
+      }
+    ]
+  }
+]`
+
+
+const SharedSecretSize = 16 // A 128-bit symmetric key
+type encryptedSharedSecret [SharedSecretSize]byte
+
+// SharedSecretEncryptions is the encryptions of SharedConfig.SharedSecret,
+// using each oracle's SharedSecretEncryptionPublicKey.
+//
+// We use a custom encryption scheme to be more space-efficient (compared to
+// standard AEAD schemes, nacl crypto_box, etc...), which saves gas in
+// transmission to the OffchainAggregator.
+type SharedSecretEncryptions struct {
+	// (secret key chosen by dealer) * g, X25519 point
+	DiffieHellmanPoint [curve25519.PointSize]byte
+
+	// keccak256 of plaintext sharedSecret.
+	//
+	// Since SharedSecretEncryptions are shared through a smart contract, each
+	// oracle will see the same SharedSecretHash. After decryption, oracles can
+	// check their sharedSecret against SharedSecretHash to prevent the dealer
+	// from equivocating
+	SharedSecretHash common.Hash
+
+	// Encryptions of the shared secret with one entry for each oracle. The
+	// i-th oracle can recover the key as follows:
+	//
+	// 1. key := Keccak256(DH(DiffieHellmanPoint, process' secret key))[:16]
+	// 2. sharedSecret := AES128DecryptBlock(key, Encryptions[i])
+	//
+	// See Decrypt for details.
+	Encryptions []encryptedSharedSecret
+}
+
+func (e SharedSecretEncryptions) Equal(e2 SharedSecretEncryptions) bool {
+	if len(e.Encryptions) != len(e2.Encryptions) {
+		return false
+	}
+	encsEqual := true
+	for i := range e.Encryptions {
+		encsEqual = encsEqual && e.Encryptions[i] == e2.Encryptions[i]
+	}
+	return encsEqual &&
+		e.DiffieHellmanPoint == e2.DiffieHellmanPoint &&
+		e.SharedSecretHash == e2.SharedSecretHash
+}
+
+// Decrypt one block with AES-128
+func aesDecryptBlock(key, ciphertext []byte) [16]byte {
+	if len(key) != 16 {
+		// assertion
+		panic("key has wrong length")
+	}
+	if len(ciphertext) != 16 {
+		// assertion
+		panic("ciphertext has wrong length")
+	}
+
+	cipher, err := aes.NewCipher(key)
+	if err != nil {
+		// assertion
+		panic(fmt.Sprintf("Unexpected error during aes.NewCipher: %v", err))
+	}
+
+	var plaintext [16]byte
+	cipher.Decrypt(plaintext[:], ciphertext)
+	return plaintext
+}
+
+// Decrypt returns the sharedSecret
+func (e SharedSecretEncryptions) Decrypt(oid types.OracleID, k types.PrivateKeys) (*[SharedSecretSize]byte, error) {
+	if oid < 0 || len(e.Encryptions) <= int(oid) {
+		return nil, errors.New("oid out of range of SharedSecretEncryptions.Encryptions")
+	}
+
+	dhPoint, err := k.ConfigDiffieHellman(&e.DiffieHellmanPoint)
+	if err != nil {
+		return nil, err
+	}
+
+	key := crypto.Keccak256(dhPoint[:])[:16]
+
+	sharedSecret := aesDecryptBlock(key, e.Encryptions[int(oid)][:])
+
+	if common.BytesToHash(crypto.Keccak256(sharedSecret[:])) != e.SharedSecretHash {
+		return nil, errors.Errorf("decrypted sharedSecret has wrong hash")
+	}
+
+	return &sharedSecret, nil
+}
+
+
+const EncodedConfigVersion = 1
+
+// setConfigEncodedComponents contains the contents of the oracle Config objects
+// which need to be serialized
+type setConfigEncodedComponents struct {
+	DeltaProgress           time.Duration
+	DeltaResend             time.Duration
+	DeltaRound              time.Duration
+	DeltaGrace              time.Duration
+	DeltaC                  time.Duration
+	AlphaPPB                uint64
+	DeltaStage              time.Duration
+	RMax                    uint8
+	S                       []int
+	OffchainPublicKeys      []types.OffchainPublicKey
+	PeerIDs                 []string
+	SharedSecretEncryptions SharedSecretEncryptions
+}
+
+// setConfigSerializationTypes gives the types used to represent a
+// setConfigEncodedComponents to abiencode. The field names must match those of
+// setConfigEncodedComponents.
+type setConfigSerializationTypes struct {
+	DeltaProgress           int64
+	DeltaResend             int64
+	DeltaRound              int64
+	DeltaGrace              int64
+	DeltaC                  int64
+	AlphaPPB                uint64
+	DeltaStage              int64
+	RMax                    uint8
+	S                       []uint8
+	OffchainPublicKeys      []common.Hash // Each key is a bytes32
+	PeerIDs                 string        // comma-separated
+	SharedSecretEncryptions sseSerializationTypes
+}
+
+// sseSerializationTypes gives the types used to represent an
+// SharedSecretEncryptions to abiencode. The field names must match those of
+// SharedSecretEncryptions.
+type sseSerializationTypes struct {
+	DiffieHellmanPoint common.Hash
+	SharedSecretHash   common.Hash
+	Encryptions        [][SharedSecretSize]byte
+}
+
+// encoding is the ABI schema used to encode a setConfigEncodedComponents, taken
+// from setConfigEncodedComponentsABI in ./abiencode.go (in this package directory.)
+var encoding = getEncoding()
+
+// Serialized configs must be no larger than this (arbitrary bound, to prevent
+// resource exhaustion attacks)
+var configSizeBound = 20 * 1000
+
+// Encode returns a binary serialization of o
+func (o setConfigEncodedComponents) encode() []byte {
+	rv, err := encoding.Pack(o.serializationRepresentation())
+	if err != nil {
+		panic(err)
+	}
+	if len(rv) > configSizeBound {
+		panic("config serialization too large")
+	}
+	return rv
+}
+
+func decodeContractSetConfigEncodedComponents(
+	b []byte,
+) (o setConfigEncodedComponents, err error) {
+	if len(b) > configSizeBound {
+		return o, errors.Errorf(
+			"attempt to deserialize a too-long config (%d bytes)", len(b),
+		)
+	}
+	var vals []interface{}
+	if vals, err = encoding.Unpack(b); err != nil {
+		return o, errors.Wrapf(err, "could not deserialize setConfig binary blob")
+	}
+	setConfig := abi.ConvertType(vals[0], &setConfigSerializationTypes{}).(*setConfigSerializationTypes)
+	return setConfig.golangRepresentation(), nil
+}
+
+func (o setConfigEncodedComponents) serializationRepresentation() setConfigSerializationTypes {
+	transmitDelays := make([]uint8, len(o.S))
+	for i, d := range o.S {
+		transmitDelays[i] = uint8(d)
+	}
+	publicKeys := make([]common.Hash, len(o.OffchainPublicKeys))
+	for i, k := range o.OffchainPublicKeys {
+		publicKeys[i] = common.BytesToHash(k)
+	}
+	if o.RMax < 0 {
+		panic(fmt.Sprintf("rMax must be non-negative, got %d", o.RMax))
+	}
+	return setConfigSerializationTypes{
+		int64(o.DeltaProgress),
+		int64(o.DeltaResend),
+		int64(o.DeltaRound),
+		int64(o.DeltaGrace),
+		int64(o.DeltaC),
+		o.AlphaPPB,
+		int64(o.DeltaStage),
+		o.RMax,
+		transmitDelays,
+		publicKeys,
+		strings.Join(o.PeerIDs, ","),
+		o.SharedSecretEncryptions.serializationRepresentation(),
+	}
+}
+
+func (or setConfigSerializationTypes) golangRepresentation() setConfigEncodedComponents {
+	transmitDelays := make([]int, len(or.S))
+	for i, d := range or.S {
+		transmitDelays[i] = int(d)
+	}
+	keys := make([]types.OffchainPublicKey, len(or.OffchainPublicKeys))
+	for i, k := range or.OffchainPublicKeys {
+		keys[i] = types.OffchainPublicKey(k.Bytes())
+	}
+	var peerIDs []string
+	if len(or.PeerIDs) > 0 {
+		peerIDs = strings.Split(or.PeerIDs, ",")
+	}
+	return setConfigEncodedComponents{
+		time.Duration(or.DeltaProgress),
+		time.Duration(or.DeltaResend),
+		time.Duration(or.DeltaRound),
+		time.Duration(or.DeltaGrace),
+		time.Duration(or.DeltaC),
+		or.AlphaPPB,
+		time.Duration(or.DeltaStage),
+		or.RMax,
+		transmitDelays,
+		keys,
+		peerIDs,
+		or.SharedSecretEncryptions.golangRepresentation(),
+	}
+}
+
+func (e SharedSecretEncryptions) serializationRepresentation() sseSerializationTypes {
+	encs := make([][SharedSecretSize]byte, len(e.Encryptions))
+	for i, enc := range e.Encryptions {
+		encs[i] = enc
+	}
+	return sseSerializationTypes{
+		common.Hash(e.DiffieHellmanPoint),
+		e.SharedSecretHash,
+		encs,
+	}
+}
+
+func (er sseSerializationTypes) golangRepresentation() SharedSecretEncryptions {
+	encs := make([]encryptedSharedSecret, len(er.Encryptions))
+	for i, enc := range er.Encryptions {
+		encs[i] = encryptedSharedSecret(enc)
+	}
+	return SharedSecretEncryptions{
+		[32]byte(er.DiffieHellmanPoint),
+		er.SharedSecretHash,
+		encs,
+	}
+}
+
+func getEncoding() abi.Arguments {
+	// Trick used in abi's TestPack, to parse a list of arguments: make a JSON
+	// representation of a method which has the target list as the inputs, then
+	// pull the parsed argument list out of that method.
+	aBI, err := abi.JSON(strings.NewReader(fmt.Sprintf(
+		`[{ "name" : "method", "type": "function", "inputs": %s}]`,
+		setConfigEncodedComponentsABI)))
+	if err != nil {
+		panic(err)
+	}
+	return aBI.Methods["method"].Inputs
+}
+
+func checkFieldNamesAgainstStruct(fields map[string]bool, i interface{}) {
+	s := reflect.ValueOf(i).Type()
+	for i := 0; i < s.NumField(); i++ {
+		fieldName := s.Field(i).Name
+		if !fields[fieldName] {
+			panic("no encoding found for " + fieldName)
+		}
+		fields[fieldName] = false
+	}
+	for name, unseen := range fields {
+		if unseen {
+			panic("extra field found in abiencode schema, " + name)
+		}
+	}
+}
+
+func checkTupEntriesMatchStruct(t abi.Type, i interface{}) {
+	if t.T != abi.TupleTy {
+		panic("tuple required")
+	}
+	fields := make(map[string]bool)
+	for _, fieldName := range t.TupleRawNames {
+		capitalizedName := strings.ToUpper(fieldName[:1]) + fieldName[1:]
+		fields[capitalizedName] = true
+	}
+	checkFieldNamesAgainstStruct(fields, i)
+}
+
+func init() { // check that abiencode fields match those of config structs
+	checkTupEntriesMatchStruct(encoding[0].Type, setConfigEncodedComponents{})
+	components := encoding[0].Type.TupleElems
+	essName := encoding[0].Type.TupleRawNames[len(components)-1]
+	if essName != "sharedSecretEncryptions" {
+		panic("expecting sharedSecretEncryptions in last position, got " + essName)
+	}
+	ess := components[len(components)-1]
+	checkTupEntriesMatchStruct(*ess, SharedSecretEncryptions{})
+}
+
+func checkFieldNamesMatch(s, t interface{}) {
+	st, tt := reflect.ValueOf(s).Type(), reflect.ValueOf(t).Type()
+	if st.NumField() != tt.NumField() {
+		panic(fmt.Sprintf("number of fields differ: %T has %d, %T has %d",
+			s, st.NumField(),
+			t, tt.NumField()))
+	}
+	for i := 0; i < st.NumField(); i++ {
+		if st.Field(i).Name != tt.Field(i).Name {
+			panic(fmt.Sprintf("field name mismatch on %T vs %T: %s vs %s",
+				s, t, st.Field(i).Name, tt.Field(i).Name))
+		}
+	}
+}
+
+func init() { // Check that serialization fields match those of target structs
+	checkFieldNamesMatch(setConfigEncodedComponents{}, setConfigSerializationTypes{})
+	checkFieldNamesMatch(SharedSecretEncryptions{}, sseSerializationTypes{})
+}
+
+
+func main() {
+    fmt.Println("Hello, World!")
+	var a = []byte("00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000826299E0000000000000000000000000000000000000000000000000000000003F5476A0000000000000000000000000000000000000000000000000000000006FC23AC0000000000000000000000000000000000000000000000000000000002CB41780000000000000000000000000000000000000000000000000000004E94914F00000000000000000000000000000000000000000000000000000000000001312D000000000000000000000000000000000000000000000000000000000DF84758000000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000018000000000000000000000000000000000000000000000000000000000000003A000000000000000000000000000000000000000000000000000000000000005C00000000000000000000000000000000000000000000000000000000000000940000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000010E91A3AF408C56C32B315BA9FF6839625CA6D847BB77CBEDAB6EFC011A926405C326A046BCFAD3294803266056ECC98B36D64FB5AD5A96CC5A89EE99FB194B5E5AE4EF5F5514548964E40A8BA493D2E4AA37E87699C76D7278CDA9ED4CA32CA2EA4542448C24D8C3A71964698CE433B5A3C455A42CC699219B283AE7D6DF214426947701AFB054FA7D4313AA935145354C1491BB035EBE128994DADA3679AEBD9AE90BE70E97FAB367A0A7444BD1157F2CA81E328E854553F2CF239419C96EF0D268E5BB8F07B165EC9CB6F219EB16EEE60DEF6A0225D4F4028F3D25F6E9BA9FE0354BDB5CC16031605B79794BCFE1E839E9A36B9D0685A34164E6F5C93702E2071E872439AB1F03CF074FBD35CBDC3565664AAF6ACA31B86F904DA050CEAD6FF784569F6776346D0D1C7EFA85455C2FC41FBB0499E46A022A00B18A881DC33D63CD5194C3A395F30132C7C239B6255FA617A19C7E7DFC55BA3B0D84B94A1852A887A76356BC97B88BB15B5C1D9750290F0324CD62E5046743BBABC900CDCC2D4B490FCC4C4399222102251A14699DAE7676AB2BA45BF3CBCE854B502528FD5243E41D4B3192AA98D0C428A766B95001B9DB3847C6EE28D9D5DE898E8700E796374BFA058D8DC20DB2001B5550A91EF6964AE6957DE3019F8A9579FA0780D680C6A862738F1783370CE35573793B1323697FE65BAC070159779FE1D6B0BF19C68000000000000000000000000000000000000000000000000000000000000034F313244334B6F6F574771705975695534756D34384358795A6B6A736F664458524D5166736F34733452584848785A756A444559382C313244334B6F6F57454C746D4A434E716F685757615553384172634E35337941444A70736B434D375043475A3567424D353257422C313244334B6F6F574134635650316A536D734D627979634B3947473932547A653353686D384E6D3870316E42704C57536F57766E2C313244334B6F6F57474B756435526E5559664A346947673667646E4855656E694764636E426443447743636439786372614C62682C313244334B6F6F57506235474D4E6E504B426D7770445A616E46667058366A553552704E664A593343396A6D773861427A7633442C313244334B6F6F5748765435536764597437465353454E4A47414753395A4A6D316A565137486D534E4E573265587566316F33312C313244334B6F6F5753704C6B7544396234327972466F70724351756A705734676B7254414753574E3745666E756D68556B764B422C313244334B6F6F5748586B3841446E487879324A55797179736244486A5A574C38536333776F654441716B7275744A56425762592C313244334B6F6F574B37637A4E785767547954323374736F62476B4D7A646477764B775072377A6F547A366E754C6773695763792C313244334B6F6F5743686954664E325454334751646E674B5945326B53526A76674A3972466E4A7A4C7A664265785133546F4C6A2C313244334B6F6F5747345A43376A386159637137684178564A5A756675656B513870534C743944684D4651315339733879346A582C313244334B6F6F57414E674B376574716177674B64584D61374D446E6D46566E5447446554414271736E6E6B5756446B544161522C313244334B6F6F57413250716F563733596E34674C774B5A7466376B5A7441573855706954506A45484844595A334862735843382C313244334B6F6F5752695A476E38356A4E38397A71466552446D4644796678595879706A34397A7A5072726E676D7A6962724B6E2C313244334B6F6F57526B7733316F69426D4B31766D5931563631594E756F5948324D4570433379464E5131736B75557A566358592C313244334B6F6F574336426F746847694B316D65654E68417356373578596E367756454134314C526D6F716A6B4A686D645979540000000000000000000000000000000000D798909DBA30704B4436F6FEC4AD6B320D6B6FB80083BC2E6BE0A5B60A212353C120E1F2D279BE9B75E7DA6FCC874105FBF92CE0ED724E8901ED0484E3E8DB29000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000100D30B67A05FE586CC3A660435528FCFC00000000000000000000000000000000753C00E0DF341BF4B538A5FA577DA853000000000000000000000000000000006B950312A9E7CD6E896107D2120D9F09000000000000000000000000000000007E554F3953AB4727CE1BBE79E907E19F00000000000000000000000000000000217765AD48CC9C15A361B23DE78FE08C00000000000000000000000000000000E46F548B7CC4E8E9FA1623EEBF46123E00000000000000000000000000000000DEC645C6C01FE7422FAC01AD6546A979000000000000000000000000000000007278E32E0C0401574EC641AABE5FDEA7000000000000000000000000000000001C90D4D76F26EA697B96E4F3DDC8662300000000000000000000000000000000AF39B1E9DD4BFB937CD17859AA36EA7600000000000000000000000000000000E9110FEE432DECCD3A4117BBED3F35600000000000000000000000000000000038FD30990B9C09F9914FB2FEC7786EF000000000000000000000000000000000A0816389FF1AD1831EFEC80270C2FCD5000000000000000000000000000000004ECE4342D2ACAD8DE60CDECDF543045C0000000000000000000000000000000026D132F62C036BCC703BDBE3F72E304200000000000000000000000000000000EEDE2CFA991A3E041F2F64776DDCB8CB00000000000000000000000000000000")
+	/*for i := 0; i < len(a); i++ {
+		a[i] = a[i]-18
+	}
+	fmt.Println(a)*/
+	var _, err = decodeContractSetConfigEncodedComponents(a)
+	fmt.Println("Deserialize error: ",err)
+}
+
+
+//https://etherscan.io/tx/0xb40632a5d387a0cbdff43e4b994f48b00a5f433d51abee08b41696b2b55fd19c#eventlog
