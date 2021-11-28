@@ -1,6 +1,5 @@
-oracle_container/volumes/geth-data/rinkeby
-oracle_container/volumes/db-data/pgdata
-oracle_container/volumes/chainlink/cookie
-oracle_container/volumes/chainlink/log.jsonl
-oracle_container/volumes/chainlink/secret
+docker_containers/volumes
+docker_containers/web_server/node_modules
+chainlink_truffle/node_modules
+chainlink_truffle/build
 
