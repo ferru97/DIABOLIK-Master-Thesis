@@ -1,5 +1,5 @@
-./docker_containers/volumes
-./docker_containers/web_server/node_modules
-./chainlink_truffle/node_modules
-./chainlink_truffle/build
+./docker_containers/volumes/*
+./docker_containers/web_server/node_modules/*
+./chainlink_truffle/node_modules/*
+./chainlink_truffle/build/*
 
