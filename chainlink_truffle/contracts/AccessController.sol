@@ -1,6 +1,6 @@
 pragma solidity ^0.7.0;
 import "./interfaces/AccessControllerInterfaceC.sol";
-import "./Owned.sol";
+import "./ocr-lib/Owned.sol";
 //import "https://github.com/smartcontractkit/libocr/blob/master/contract/Owned.sol";
 
 

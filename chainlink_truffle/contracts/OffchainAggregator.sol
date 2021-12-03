@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.7.0;
 
-import "./AccessControllerInterface.sol";
-import "./AggregatorV2V3Interface.sol";
-import "./AggregatorValidatorInterface.sol";
-import "./LinkTokenInterface.sol";
-import "./Owned.sol";
-import "./OffchainAggregatorBilling.sol";
-import "./TypeAndVersionInterface.sol";
+import "./ocr-lib/AccessControllerInterface.sol";
+import "./ocr-lib/AggregatorV2V3Interface.sol";
+import "./ocr-lib/AggregatorValidatorInterface.sol";
+import "./ocr-lib/LinkTokenInterface.sol";
+import "./ocr-lib/Owned.sol";
+import "./ocr-lib/OffchainAggregatorBilling.sol";
+import "./ocr-lib/TypeAndVersionInterface.sol";
 import "./ValuesTracker.sol";
 
 /**
@@ -655,6 +655,8 @@ contract OffchainAggregator is Owned, OffchainAggregatorBilling, AggregatorV2V3I
     }
 
 
+    uint64 resID;
+    uint128 resData;
     { // Check the report contents, and record the result
       for (uint i = 0; i < r.observations.length - 1; i++) {
         bool inOrder = r.observations[i] <= r.observations[i+1];
@@ -697,16 +699,19 @@ contract OffchainAggregator is Owned, OffchainAggregatorBilling, AggregatorV2V3I
       validateAnswer(r.hotVars.latestAggregatorRoundId, median);
       
       /////////////////////////////////////////////////////////////////////////////////////////
-      uint64 id = uint64(median>>128);
-      int128 data = int128((median<<64)>>64);
-      tracker.oraclesResult(id,data);
+      resID = uint64(median>>128);
+      resData = uint128((median<<64)>>64);
       /////////////////////////////////////////////////////////////////////////////////////////
     }
     s_hotVars = r.hotVars;
     assert(initialGas < maxUint32);
     reimburseAndRewardOracles(uint32(initialGas), r.observers);
+
+    /////////////////////////////////////////////////////////////////////////////////////////
     uint remainingLink = maxRequestLinkCost-(totalLINKDue()-lastTotalLinkDueToOracles);
     refundRequester(remainingLink ,requesterAddr);
+    tracker.oraclesResult(resID, resData);
+    /////////////////////////////////////////////////////////////////////////////////////////
   }
 
   /*
@@ -883,13 +888,20 @@ contract OffchainAggregator is Owned, OffchainAggregatorBilling, AggregatorV2V3I
   }
 
 
+
+
+
+
+
+
+
+
   function setValueTracker(address addr)
   public
   onlyOwner()
   {
     tracker = ValuesTracker(addr);
   }
-
 
 
   //@param _maxRequestLinkCost max LINK cost a user will pay when requesting a value

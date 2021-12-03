@@ -19,9 +19,9 @@ module.exports = {
     },
     geth: {
       provider: function() {
-        return new HDWalletProvider(geth_pk, "http://192.168.1.11:8545")
+        return new HDWalletProvider(mnemonic, "http://192.168.1.11:8545")
       },
-      from: "0x489e5a160A6d7820a84109cBf893C0293321132C",
+      from: "0xdB037f36AA49DfBbb542f9A29D6506912A0AaB73",
       network_id: '1337',
     },
     rinkeby: {

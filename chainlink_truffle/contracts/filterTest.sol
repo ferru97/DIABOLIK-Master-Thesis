@@ -46,4 +46,16 @@ contract Filter {
     {
         return msg.sender;
     }
+
+
+    function kek()
+    public
+    pure
+    returns(uint128)
+    {
+        string memory c = "5";
+        bytes16 n = bytes16(keccak256(bytes(c)));
+        uint128 m = uint128(n);
+        return m;
+    }
 }

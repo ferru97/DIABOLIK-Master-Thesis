@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.7.1;
 
-import "./OffchainAggregator.sol";
+import "../OffchainAggregator.sol";
 import "./SimpleReadAccessController.sol";
 
 /**
