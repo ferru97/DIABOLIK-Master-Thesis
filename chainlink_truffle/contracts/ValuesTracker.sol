@@ -3,6 +3,7 @@ import "./interfaces/OCRCallback.sol";
 import "./interfaces/ResultCallback.sol";
 import "./OffchainAggregator.sol";
 import "./centralized-oracle-lib/ChainlinkClient.sol";
+import "./ocr-lib/LinkTokenInterface.sol";
 
 
 contract ValuesTracker is OCRCallbackInterface, ChainlinkClient {
@@ -27,6 +28,7 @@ contract ValuesTracker is OCRCallbackInterface, ChainlinkClient {
     }
     
     event NewRequest(uint64 rId);
+    event DataReceived(string msg, uint64 roundID);
   
     uint64 public reqId = 0;
     mapping(uint64 => Query) public reqQueue;
@@ -38,6 +40,7 @@ contract ValuesTracker is OCRCallbackInterface, ChainlinkClient {
     uint64 public currReq = 0;
 
     OffchainAggregator public ocr;
+    LinkTokenInterface public link;
 
 
     /*
@@ -53,6 +56,7 @@ contract ValuesTracker is OCRCallbackInterface, ChainlinkClient {
         setChainlinkToken(_link);
         setChainlinkOracle(_dataOracle);
         jobID = _jobID;
+        link = LinkTokenInterface(_link);
     }
 
 
@@ -62,6 +66,8 @@ contract ValuesTracker is OCRCallbackInterface, ChainlinkClient {
     {
         require((address(callbackAddr)==address(0) || address(callbackAddr)==msg.sender), 
             "The callback contract must have the same address as the requester");
+
+        require(link.transferFrom(msg.sender, address(this), dataFetchLinkCost), "Error: insufficient LINK funds");
 
         reqId++;
         last = reqId;
@@ -97,7 +103,7 @@ contract ValuesTracker is OCRCallbackInterface, ChainlinkClient {
 
 
     function doRequest(uint64 rid, uint128 vhash) 
-    internal
+    public
     {
         Chainlink.Request memory req = buildChainlinkRequest(jobID, address(this), this.fulfill2.selector);
         req.add("hash",uint2str(vhash));
@@ -106,35 +112,18 @@ contract ValuesTracker is OCRCallbackInterface, ChainlinkClient {
     }
 
 
-    function fulfill2(uint64 requestID, bytes calldata answer, address sender) 
+    function fulfill2(bytes32 requestID, bytes calldata answer, address sender, uint64 queueID) 
     public
-    {
-        require(reqQueue[requestID].dataReceivedTime==0, "Error: data not needed");
+    {        
+        require(reqQueue[queueID].dataReceivedTime==0, "Error: data not needed");
         bytes16 resHash = bytes16(keccak256(answer));
-        require(uint128(resHash)==reqQueue[requestID].dataHash, "Error: received value do not match the hash");
-        reqQueue[requestID].data = answer;
-        reqQueue[requestID].dataReceivedTime = block.timestamp;
-        reqQueue[requestID].dataOracle = sender;
-        if(address(reqQueue[requestID].requesterCallback)!=address(0))
-            reqQueue[requestID].requesterCallback.result(requestID, answer);
-    }
-
-
-    function checkResult(uint64 id)
-    external
-    view
-    returns(bytes memory)
-    {
-        return reqQueue[id].data;
-    }
-
-
-    function checkIfFinished(uint64 id)
-    external
-    view
-    returns(uint256)
-    {
-        return reqQueue[id].endTime;
+        require(uint128(resHash)==reqQueue[queueID].dataHash, "Error: received value do not match the hash");
+        reqQueue[queueID].data = answer;
+        reqQueue[queueID].dataReceivedTime = block.timestamp;
+        reqQueue[queueID].dataOracle = sender;
+        if(address(reqQueue[queueID].requesterCallback)!=address(0))
+            reqQueue[queueID].requesterCallback.result(queueID, answer);
+        emit DataReceived("New data received", queueID);
     }
 
 

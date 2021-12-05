@@ -4,8 +4,8 @@ const ac = artifacts.require("AccessController")
 const values = artifacts.require('Values')
 const { LinkToken } = require('@chainlink/contracts/truffle/v0.4/LinkToken')
 
-
-const OPERATOR = "0x9d64859D3C290AC6B4AD34B2BfF9Fc58673b7b8B"
+//275046176355070374110092839585164817690
+const OPERATOR = "0xC974E43541aC5B30C00A8658909CBaA4f2c7150D"
 const OPERATOR_JOB = "0x142ff8885ecb4152a44969de0b419e9e00000000000000000000000000000000"
 const DATA_FETCH_COST = "100000000000000000"
 const LINK_ADDRESS = "0xf8066f5Daf76f4292d0b749E2d856228459AeDc4"
@@ -69,6 +69,7 @@ module.exports = async (deployer, network, [defaultAccount]) => {
     await tracker_cnt.setMaxReqTime(maxReqTime, { from: defaultAccount })
     //await tracker_cnt.checkValue("a",block.number,values_cnt.address)
     await link.approve(ocr_cnt.address, "150000000000000000000", { from: defaultAccount })
+    await link.approve(tracker_cnt.address, "150000000000000000000", { from: defaultAccount })
 
 
     console.log("values address : ",values_cnt.address)
