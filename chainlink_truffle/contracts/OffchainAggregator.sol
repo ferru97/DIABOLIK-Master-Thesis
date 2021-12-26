@@ -8,7 +8,7 @@ import "./ocr-lib/LinkTokenInterface.sol";
 import "./ocr-lib/Owned.sol";
 import "./ocr-lib/OffchainAggregatorBilling.sol";
 import "./ocr-lib/TypeAndVersionInterface.sol";
-import "./ValuesTracker.sol";
+import "./RequestManager.sol";
 
 /**
   * @notice Onchain verification of reports from the offchain reporting protocol
@@ -18,7 +18,7 @@ import "./ValuesTracker.sol";
 */
 contract OffchainAggregator is Owned, OffchainAggregatorBilling, AggregatorV2V3Interface, TypeAndVersionInterface {
 
-  ValuesTracker public tracker;
+  RequestManager public tracker;
   uint public maxRequestLinkCost = 0;
   uint public lastTotalLinkDueToOracles;
   address public requesterAddr;
@@ -710,7 +710,7 @@ contract OffchainAggregator is Owned, OffchainAggregatorBilling, AggregatorV2V3I
     /////////////////////////////////////////////////////////////////////////////////////////
     uint remainingLink = maxRequestLinkCost-(totalLINKDue()-lastTotalLinkDueToOracles);
     refundRequester(remainingLink ,requesterAddr);
-    tracker.oraclesResult(resID, resData);
+    tracker.hashCallback(resID, resData);
     /////////////////////////////////////////////////////////////////////////////////////////
   }
 
@@ -896,11 +896,11 @@ contract OffchainAggregator is Owned, OffchainAggregatorBilling, AggregatorV2V3I
 
 
 
-  function setValueTracker(address addr)
+  function setRequestManager(address addr)
   public
   onlyOwner()
   {
-    tracker = ValuesTracker(addr);
+    tracker = RequestManager(addr);
   }
 
 
