@@ -5,66 +5,52 @@ const keccak256 = require('keccak256')
 //const web3 = new Web3(new Web3.providers.HttpProvider("https://rinkeby.infura.io/v3/99b562d80026460c830b5b4e853be5a1"));
 const web3 = new Web3(new Web3.providers.HttpProvider("http://192.168.1.11:8545"));
 
-const valuesABI = [ { "inputs": [], "stateMutability": "nonpayable", "type": "constructor" }, { "inputs": [], "name": "a", "outputs": [ { "internalType": "int128", "name": "", "type": "int128" } ], "stateMutability": "view", "type": "function", "constant": true }, { "inputs": [], "name": "b", "outputs": [ { "internalType": "int128", "name": "", "type": "int128" } ], "stateMutability": "view", "type": "function", "constant": true }, { "inputs": [ { "internalType": "int128", "name": "v", "type": "int128" } ], "name": "setA", "outputs": [], "stateMutability": "nonpayable", "type": "function" }, { "inputs": [ { "internalType": "int128", "name": "v", "type": "int128" } ], "name": "setB", "outputs": [], "stateMutability": "nonpayable", "type": "function" } ]
-const trackerABI = [ { "anonymous": false, "inputs": [ { "indexed": false, "internalType": "uint64", "name": "rId", "type": "uint64" } ], "name": "NewRequest", "type": "event" }, { "inputs": [], "name": "currReq", "outputs": [ { "internalType": "uint64", "name": "", "type": "uint64" } ], "stateMutability": "view", "type": "function", "constant": true }, { "inputs": [], "name": "maxReqTime", "outputs": [ { "internalType": "uint256", "name": "", "type": "uint256" } ], "stateMutability": "view", "type": "function", "constant": true }, { "inputs": [], "name": "ocr", "outputs": [ { "internalType": "contract OffchainAggregator", "name": "", "type": "address" } ], "stateMutability": "view", "type": "function", "constant": true }, { "inputs": [], "name": "reqId", "outputs": [ { "internalType": "uint64", "name": "", "type": "uint64" } ], "stateMutability": "view", "type": "function", "constant": true }, { "inputs": [ { "internalType": "uint64", "name": "", "type": "uint64" } ], "name": "reqQueue", "outputs": [ { "internalType": "address", "name": "requester", "type": "address" }, { "internalType": "string", "name": "property", "type": "string" }, { "internalType": "uint256", "name": "blockNum", "type": "uint256" }, { "internalType": "address", "name": "cont", "type": "address" }, { "internalType": "int128", "name": "result", "type": "int128" }, { "internalType": "uint256", "name": "startTime", "type": "uint256" }, { "internalType": "uint256", "name": "endTime", "type": "uint256" } ], "stateMutability": "view", "type": "function", "constant": true }, { "inputs": [ { "internalType": "string", "name": "property", "type": "string" }, { "internalType": "uint256", "name": "blockNum", "type": "uint256" }, { "internalType": "address", "name": "cont", "type": "address" } ], "name": "checkValue", "outputs": [ { "internalType": "uint64", "name": "", "type": "uint64" } ], "stateMutability": "nonpayable", "type": "function" }, { "inputs": [], "name": "checkNewRound", "outputs": [], "stateMutability": "nonpayable", "type": "function" }, { "inputs": [ { "internalType": "uint64", "name": "id", "type": "uint64" }, { "internalType": "int128", "name": "data", "type": "int128" } ], "name": "oraclesResult", "outputs": [], "stateMutability": "nonpayable", "type": "function" }, { "inputs": [ { "internalType": "uint64", "name": "id", "type": "uint64" } ], "name": "checkResult", "outputs": [ { "internalType": "int128", "name": "", "type": "int128" } ], "stateMutability": "view", "type": "function", "constant": true }, { "inputs": [ { "internalType": "uint64", "name": "id", "type": "uint64" } ], "name": "checkIfFinished", "outputs": [ { "internalType": "uint256", "name": "", "type": "uint256" } ], "stateMutability": "view", "type": "function", "constant": true }, { "inputs": [ { "internalType": "address", "name": "addr", "type": "address" } ], "name": "setOCR", "outputs": [], "stateMutability": "nonpayable", "type": "function" }, { "inputs": [ { "internalType": "uint256", "name": "time", "type": "uint256" } ], "name": "setMaxReqTime", "outputs": [], "stateMutability": "nonpayable", "type": "function" }, { "inputs": [], "name": "getCurrReqBlock", "outputs": [ { "internalType": "uint256", "name": "", "type": "uint256" } ], "stateMutability": "view", "type": "function", "constant": true }, { "inputs": [], "name": "getCurrReqProperty", "outputs": [ { "internalType": "string", "name": "", "type": "string" } ], "stateMutability": "view", "type": "function", "constant": true }, { "inputs": [], "name": "getCurrReqContract", "outputs": [ { "internalType": "address", "name": "", "type": "address" } ], "stateMutability": "view", "type": "function", "constant": true }, { "inputs": [], "name": "ququeSize", "outputs": [ { "internalType": "int256", "name": "", "type": "int256" } ], "stateMutability": "view", "type": "function", "constant": true } ]
+const reqManagerABI = [ { "inputs": [ { "internalType": "uint256", "name": "_dataFetchLinkCost", "type": "uint256" }, { "internalType": "address", "name": "_DRcontract", "type": "address" }, { "internalType": "bytes32", "name": "_jobID", "type": "bytes32" }, { "internalType": "address", "name": "_link", "type": "address" } ], "stateMutability": "nonpayable", "type": "constructor" }, { "anonymous": false, "inputs": [ { "indexed": true, "internalType": "bytes32", "name": "id", "type": "bytes32" } ], "name": "ChainlinkCancelled", "type": "event" }, { "anonymous": false, "inputs": [ { "indexed": true, "internalType": "bytes32", "name": "id", "type": "bytes32" } ], "name": "ChainlinkFulfilled", "type": "event" }, { "anonymous": false, "inputs": [ { "indexed": true, "internalType": "bytes32", "name": "id", "type": "bytes32" } ], "name": "ChainlinkRequested", "type": "event" }, { "anonymous": false, "inputs": [ { "indexed": false, "internalType": "string", "name": "msg", "type": "string" }, { "indexed": false, "internalType": "uint64", "name": "roundID", "type": "uint64" } ], "name": "DataReceived", "type": "event" }, { "anonymous": false, "inputs": [ { "indexed": false, "internalType": "uint64", "name": "rId", "type": "uint64" } ], "name": "NewRequest", "type": "event" }, { "inputs": [], "name": "DRcontract", "outputs": [ { "internalType": "address", "name": "", "type": "address" } ], "stateMutability": "view", "type": "function" }, { "inputs": [], "name": "OCRcontract", "outputs": [ { "internalType": "contract OffchainAggregator", "name": "", "type": "address" } ], "stateMutability": "view", "type": "function" }, { "inputs": [], "name": "currReq", "outputs": [ { "internalType": "uint64", "name": "", "type": "uint64" } ], "stateMutability": "view", "type": "function" }, { "inputs": [], "name": "dataFetchLinkCost", "outputs": [ { "internalType": "uint256", "name": "", "type": "uint256" } ], "stateMutability": "view", "type": "function" }, { "inputs": [], "name": "jobID", "outputs": [ { "internalType": "bytes32", "name": "", "type": "bytes32" } ], "stateMutability": "view", "type": "function" }, { "inputs": [], "name": "link", "outputs": [ { "internalType": "contract LinkTokenInterface", "name": "", "type": "address" } ], "stateMutability": "view", "type": "function" }, { "inputs": [], "name": "maxReqTime", "outputs": [ { "internalType": "uint256", "name": "", "type": "uint256" } ], "stateMutability": "view", "type": "function" }, { "inputs": [], "name": "reqId", "outputs": [ { "internalType": "uint64", "name": "", "type": "uint64" } ], "stateMutability": "view", "type": "function" }, { "inputs": [ { "internalType": "uint64", "name": "", "type": "uint64" } ], "name": "requestsQueue", "outputs": [ { "internalType": "address", "name": "requester", "type": "address" }, { "internalType": "bool", "name": "callbackValue", "type": "bool" }, { "internalType": "uint128", "name": "dataHash", "type": "uint128" }, { "internalType": "uint256", "name": "OCRstartTime", "type": "uint256" }, { "internalType": "uint256", "name": "OCRendTime", "type": "uint256" }, { "internalType": "uint256", "name": "dataReceivedTime", "type": "uint256" }, { "internalType": "address", "name": "respondingOracle", "type": "address" }, { "internalType": "uint256", "name": "depositTime", "type": "uint256" }, { "internalType": "uint256", "name": "amountDeposited", "type": "uint256" }, { "internalType": "address", "name": "user", "type": "address" } ], "stateMutability": "view", "type": "function" }, { "inputs": [ { "internalType": "uint256", "name": "_depositTime", "type": "uint256" }, { "internalType": "address", "name": "_user", "type": "address" }, { "internalType": "bool", "name": "callbackValue", "type": "bool" } ], "name": "makeObservation", "outputs": [ { "internalType": "uint64", "name": "", "type": "uint64" } ], "stateMutability": "nonpayable", "type": "function" }, { "inputs": [], "name": "tryNewRound", "outputs": [], "stateMutability": "nonpayable", "type": "function" }, { "inputs": [ { "internalType": "uint64", "name": "id", "type": "uint64" }, { "internalType": "uint128", "name": "data", "type": "uint128" } ], "name": "hashCallback", "outputs": [], "stateMutability": "nonpayable", "type": "function" }, { "inputs": [ { "internalType": "uint64", "name": "rid", "type": "uint64" }, { "internalType": "uint128", "name": "vhash", "type": "uint128" } ], "name": "requestActualData", "outputs": [], "stateMutability": "nonpayable", "type": "function" }, { "inputs": [ { "internalType": "bytes32", "name": "requestID", "type": "bytes32" }, { "internalType": "uint256", "name": "amount", "type": "uint256" }, { "internalType": "address", "name": "sender", "type": "address" }, { "internalType": "uint64", "name": "queueID", "type": "uint64" } ], "name": "dataCallback", "outputs": [], "stateMutability": "nonpayable", "type": "function" }, { "inputs": [ { "internalType": "uint64", "name": "_reqID", "type": "uint64" } ], "name": "getRequest", "outputs": [ { "components": [ { "internalType": "address", "name": "requester", "type": "address" }, { "internalType": "bool", "name": "callbackValue", "type": "bool" }, { "internalType": "uint128", "name": "dataHash", "type": "uint128" }, { "internalType": "uint256", "name": "OCRstartTime", "type": "uint256" }, { "internalType": "uint256", "name": "OCRendTime", "type": "uint256" }, { "internalType": "uint256", "name": "dataReceivedTime", "type": "uint256" }, { "internalType": "address", "name": "respondingOracle", "type": "address" }, { "internalType": "uint256", "name": "depositTime", "type": "uint256" }, { "internalType": "uint256", "name": "amountDeposited", "type": "uint256" }, { "internalType": "address", "name": "user", "type": "address" } ], "internalType": "struct RequestManager.Request", "name": "", "type": "tuple" } ], "stateMutability": "view", "type": "function" }, { "inputs": [ { "internalType": "address", "name": "addr", "type": "address" } ], "name": "setOCRcontract", "outputs": [], "stateMutability": "nonpayable", "type": "function" }, { "inputs": [ { "internalType": "uint256", "name": "time", "type": "uint256" } ], "name": "setMaxReqTime", "outputs": [], "stateMutability": "nonpayable", "type": "function" }, { "inputs": [], "name": "ququeSize", "outputs": [ { "internalType": "int256", "name": "", "type": "int256" } ], "stateMutability": "view", "type": "function" }, { "inputs": [ { "internalType": "uint256", "name": "x", "type": "uint256" } ], "name": "toBytes", "outputs": [ { "internalType": "bytes", "name": "b", "type": "bytes" } ], "stateMutability": "nonpayable", "type": "function" } ]
 
 
-async function getValue(trackerAddr, res, saveOracleData, oid){
+
+async function getDataHash(req_manager, res, saveOracleData, oid, gambling_sc_list){
     try{
-        console.log(trackerAddr)
-        const trackerContract = await new web3.eth.Contract(trackerABI, trackerAddr)
-        const property = await trackerContract.methods.getCurrReqProperty.call().call()
-        const at = await trackerContract.methods.getCurrReqBlock.call().call()
-        if(at==0)
-            at=-1
-        const valuesAddress = await trackerContract.methods.getCurrReqContract.call().call()
-        const valuesContract = await new web3.eth.Contract(valuesABI, valuesAddress)
-
-        var reqId = await trackerContract.methods.currReq.call().call()
-        console.log("\nReqID: ", reqId)
+        const managerContract = await new web3.eth.Contract(reqManagerABI, req_manager)
+        const currReq = await managerContract.methods.currReq.call().call()
+        const request = await managerContract.methods.getRequest(currReq).call()
+        if(request.user == "0x0000000000000000000000000000000000000000"){
+            res.status(200).send("0"); 
+            return
+        }
+        const player = request.user
+        const period = request.depositTime
         
-        if(at<0)
-            at = "latest"
-        val = await valuesContract.methods[property].call(block_identifier=at).call(block_identifier=at)      
-        //var val = await valuesContract.methods[property].call().call()
-        console.log("Value: ", val)
+        let now = new Date().getTime() / 1000
+        let block_num = await web3.eth.getBlockNumber()
+        let block = await web3.eth.getBlock(block_num)
+        let spent = BigInt(0);
+        while(block.timestamp > now-period && block.number>10){
+            for (let i = 0; i < block.transactions.length; i++) {
+                let transaction = await web3.eth.getTransaction(block.transactions[i])
+                if(transaction.from==player && gambling_sc_list.includes(transaction.to))
+                    spent += BigInt(transaction.value)
+            }
+            block = await web3.eth.getBlock(block.number-1)
+        }
 
-        var val_hash = keccak256(val.toString()).toString('hex')
-        var bn = BigInt('0x' + val_hash.substring(0,32));
+        var spent_hash = keccak256(spent.toString()).toString('hex')
+        var spent_bn = BigInt('0x' + spent_hash.substring(0,32));
+        var res_str = (BigInt(currReq)*(BigInt(2)**BigInt(128)))+spent_bn
 
-        var res_str = (BigInt(reqId)*(BigInt(2)**BigInt(128)))+bn
-        console.log("Out val: ", res_str.toString())
+        console.log(`Request ${currReq} spent ${spent}`)
+
+        saveOracleData(oid, currReq, spent)
+        res.status(200).send(res_str.toString())
         
-        saveOracleData(oid, reqId, val)
-
-        res.status(200).send(res_str.toString());
     }catch(error){
         console.log(error)
         res.status(200).send("0"); 
     }
-    
 }
 
-async function setValue(property, res, num){
-    const addr = await web3.eth.getAccounts()
-    try{
-        if(property=="a")
-            await valuesContract.methods.setA(num).send({from: addr[0]})
-        else
-            await valuesContract.methods.setB(num).send({from: addr[0]})
-        res.status(200).send('Value set');
-    }catch(err){
-        res.status(200).send(err);
-    }
-}
 
 
 module.exports = {
-    setValue: setValue,
-    getValue: getValue 
+    getDataHash: getDataHash,
  }
-
-//var res_str = (BigInt(2)*(BigInt(2)**BigInt(128)))+BigInt("25")
-//console.log("Out val: ", res_str.toString())
-
- //BigInt(5000).toString(2)

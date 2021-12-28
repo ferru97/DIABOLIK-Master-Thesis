@@ -20,6 +20,7 @@ app.use(cors());
 app.use(ExpressAPILogMiddleware(logger, { request: false }));
 
 let oraclesValues = new Map(); //<rid,Map<oid,value>>
+let gambling_sc_list = ["0x838aCD0f3Fbf6C5F4d994A6870a2a28afaC63F98", "0x7E836AF68696ACe5509dC3B218081befcD6114B4"];
 
 
 function saveOracleData(oid, rid, value){
@@ -32,34 +33,9 @@ function saveOracleData(oid, rid, value){
 }
 
 
-app.get('/', (req, res) => {
-	var ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress
-	
-	if(ip == "10.5.0.7")
-		res.status(200).send('10');
-	else
-    	res.status(200).send('15');
-});
 
-
-app.post('/echo', (req, res) => {	
-    var v = keccak256(req.body.value).toString('hex')
-    //var start = BigInt('0x' + v.substring(0,128))
-    //var end = BigInt('0x' + v.substring(128,256))
-    //var hash_xor = start ^ end; 
-	res.status(200).send(v.substring(0,32));
-});
-
-app.get('/test', (req, res) => {	
-    var hash = keccak256("5").toString('hex')
-    var bn = BigInt('0x' + hash.substring(0,32));
-	res.status(200).send(bn.toString());
-});
-
-
-
-app.get('/get', (req, res) => {
-    tracker = req.query.tracker
+app.get('/getDataHash', (req, res) => {
+    req_manager = req.query.reqmanager
     oid = req.query.oid
     fraudolent = req.query.fraudolent
 
@@ -69,40 +45,13 @@ app.get('/get', (req, res) => {
         return
     }
 
-    if(tracker==undefined || oid==undefined){
-        res.status(200).send('Error 1: incorrect parameters!');
+    if(req_manager==undefined || oid==undefined){
+        res.status(404).send('Error 1: incorrect parameters!');
         return
     }
 
-    bc.getValue(tracker, res, saveOracleData, oid)
+    bc.getDataHash(req_manager, res, saveOracleData, oid, gambling_sc_list)
 });
-
-
-app.get('/set', (req, res) => {
-	property = req.query.property
-    value = req.query.val
-    if(property==undefined || value==undefined)
-        res.status(200).send('Error 2: incorrect parameters');
-    else
-        bc.setValue(property, res, value)
-});
-
-
-app.post('/saveValue', (req, res)=>{
-    oid = req.body.oid
-    rid = req.body.rid
-    value = req.body.value
-    if(oid==undefined || rid==undefined || value==undefined){
-        res.status(404).send('Error 3: incorrect parameters');
-        return
-    }
-
-    if(oraclesValues[rid]==undefined)
-        oraclesValues[rid] = new Map()
-
-    (oraclesValues[rid])[oid] = value
-    res.status(200).send('1');
-})
 
 
 app.post('/getSavedData', (req, res)=>{
@@ -138,6 +87,21 @@ app.post('/getSavedData', (req, res)=>{
         res.status(404).send();
 
 })
+
+
+app.post('/set-gambling-sc-list', (req, res)=>{
+    if(req.body.sc_list != undefined){
+        gambling_sc_list = req.body.sc_list
+        res.status(200).send("ok")
+    }else{
+        res.status(200).send("Error: gambling smart contracts list not provided")
+    }
+})
+
+app.get('/get-gambling-sc-list', (req, res)=>{
+    res.status(200).send(gambling_sc_list.toString())
+})
+
 
 
 
