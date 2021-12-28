@@ -14,8 +14,7 @@ contract RequestManager is OCRCallbackInterface, ChainlinkClient {
 
     struct Request{
         //static parameters
-        address requester;
-        bool callbackValue;
+        ResultCallbackInterface requester;
         uint128 dataHash; //hash of amountDeposited
         uint256 OCRstartTime;
         uint256 OCRendTime;
@@ -24,7 +23,7 @@ contract RequestManager is OCRCallbackInterface, ChainlinkClient {
         // application-dependent parameter
         uint256 depositTime;
         uint256 amountDeposited;
-        address user;
+        address payable user;
     }
     
     event NewRequest(uint64 rId);
@@ -45,6 +44,16 @@ contract RequestManager is OCRCallbackInterface, ChainlinkClient {
     LinkTokenInterface public link;
 
 
+    modifier OnlyOCR() {
+        require(msg.sender==address(OCRcontract), "Only the OCR contract can access this function");
+        _;
+    }
+
+     modifier OnlyDR() {
+        require(msg.sender==address(DRcontract), "Only the DR contract can access this function");
+        _;
+    }
+
     /*
    * @param _dataFetchLinkCost cost of requesting the corresponding data of a given hash 
    * @param _DRcontract address of the Operator.sol contract used to request data on a given hash 
@@ -62,18 +71,13 @@ contract RequestManager is OCRCallbackInterface, ChainlinkClient {
     }
 
 
-    function makeObservation(uint256 _depositTime, address _user, bool callbackValue)
+    function makeObservation(uint256 _depositTime, address payable _user)
     public
     returns(uint64)
     {
-        /*require((address(callbackAddr)==address(0) || address(callbackAddr)==msg.sender), 
-            "The callback contract must have the same address as the requester");*/
-
-        require(link.transferFrom(msg.sender, address(this), dataFetchLinkCost), "Error: insufficient LINK funds");
-
         reqId++;
         lastReqID = reqId;
-        Request memory newRequest = Request(msg.sender, callbackValue, 0, 0, 0, 0, address(0), 0, 0, _user);
+        Request memory newRequest = Request(ResultCallbackInterface(msg.sender), 0, 0, 0, 0, address(0), _depositTime, 0, _user);
         requestsQueue[reqId] = newRequest;
         tryNewRound();
         return reqId;
@@ -86,8 +90,10 @@ contract RequestManager is OCRCallbackInterface, ChainlinkClient {
         if( (currReq==0 || requestsQueue[currReq].OCRstartTime+maxReqTime<_now) && firstReqID<lastReqID ){
             firstReqID++;
             currReq = firstReqID;
+            require(link.transferFrom(address(requestsQueue[currReq].requester), address(OCRcontract), OCRcontract.maxRequestLinkCost()), 
+                "Error: insufficient LINK to fund the OCR job");
             requestsQueue[currReq].OCRstartTime = _now;
-            OCRcontract.requestNewRound(msg.sender);
+            OCRcontract.requestNewRound(address(requestsQueue[currReq].requester));
             emit NewRequest(firstReqID);
         }
     }
@@ -95,18 +101,21 @@ contract RequestManager is OCRCallbackInterface, ChainlinkClient {
     function hashCallback(uint64 id, uint128 data) //
     external
     override
+    OnlyOCR
     {
        requestsQueue[id].dataHash = data;
        requestsQueue[id].OCRendTime = block.timestamp;
-       currReq = 0;
        requestActualData(id, data); 
+       currReq = 0;
        tryNewRound();
     }
 
 
     function requestActualData(uint64 rid, uint128 vhash) 
-    public
+    internal
     {
+        require(link.transferFrom(address(requestsQueue[rid].requester), address(this), dataFetchLinkCost), 
+            "Error: insufficient LINK to fund the Direct Request job");
         Chainlink.Request memory req = buildChainlinkRequest(jobID, address(this), this.dataCallback.selector);
         req.add("hash",uint2str(vhash));
         req.add("rid",uint2str(rid));
@@ -114,17 +123,17 @@ contract RequestManager is OCRCallbackInterface, ChainlinkClient {
     }
 
 
-    function dataCallback(bytes32 requestID, uint amount, address sender, uint64 queueID) 
+    function dataCallback(bytes32 requestID, uint256 amount, address sender, uint64 queueID) 
     public
+    OnlyDR
     {        
         require(requestsQueue[queueID].dataReceivedTime==0, "Error: data not needed");
-        bytes16 resHash = bytes16(keccak256(toBytes(amount)));
+        bytes16 resHash = bytes16(keccak256(bytes(uint2str(amount))));
         require(uint128(resHash)==requestsQueue[queueID].dataHash, "Error: received value do not match the hash");
         requestsQueue[queueID].amountDeposited = uint(amount);
         requestsQueue[queueID].dataReceivedTime = block.timestamp;
         requestsQueue[queueID].respondingOracle = sender;
-        /*if(address(requestsQueue[queueID].callbackAddress)!=address(0))
-            requestsQueue[queueID].callbackAddress.result(queueID, amount);*/
+        requestsQueue[queueID].requester.result(requestsQueue[queueID].user, amount);
         emit DataReceived("New data received", queueID);
     }
 
@@ -160,6 +169,13 @@ contract RequestManager is OCRCallbackInterface, ChainlinkClient {
     }
 
 
+
+    // Utility Functions
+    function toBytes(uint256 x) internal returns (bytes memory b) {
+        b = new bytes(32);
+        assembly { mstore(add(b, 32), x) }
+    }
+
     function uint2str(uint _i) internal pure returns (string memory _uintAsString) {
         if (_i == 0) {
             return "0";
@@ -182,8 +198,4 @@ contract RequestManager is OCRCallbackInterface, ChainlinkClient {
         return string(bstr);
     }
 
-    function toBytes(uint256 x) public returns (bytes memory b) {
-        b = new bytes(32);
-        assembly { mstore(add(b, 32), x) }
-    }
 }

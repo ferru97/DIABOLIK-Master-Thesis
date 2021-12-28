@@ -1,5 +1,5 @@
 pragma solidity ^0.7.0;
 
 interface ResultCallbackInterface {
-  function result(uint64 id, uint amount) external;
+  function result(address payable user, uint amount) external;
 }

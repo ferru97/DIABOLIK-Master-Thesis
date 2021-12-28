@@ -1,14 +1,13 @@
 const manager = artifacts.require('RequestManager')
 const ocr = artifacts.require("OffchainAggregator")
 const ac = artifacts.require("AccessController")
-const values = artifacts.require('Values')
+const betDapp = artifacts.require('BetDapp')
 const Operator = artifacts.require('Operator')
 const { LinkToken } = require('@chainlink/contracts/truffle/v0.4/LinkToken')
 
 //275046176355070374110092839585164817690
-const OPERATOR = "0xF98Cb0fee362a45EbA64756a804BD77b4bB8800E"
 const OPERATOR_JOB = "0x142ff8885ecb4152a44969de0b419e9e00000000000000000000000000000000"
-const DATA_FETCH_COST = "100000000000000000"
+const DATA_FETCH_COST = "1000000000000000000"
 const LINK_ADDRESS = "0xf8066f5Daf76f4292d0b749E2d856228459AeDc4"
 const ONE_LINK = "1000000000000000000"
 
@@ -38,7 +37,7 @@ module.exports = async (deployer, network, [defaultAccount]) => {
     manager.setProvider(deployer.provider)
     ocr.setProvider(deployer.provider)
     ac.setProvider(deployer.provider)
-    values.setProvider(deployer.provider)
+    betDapp.setProvider(deployer.provider)
     LinkToken.setProvider(deployer.provider)
     Operator.setProvider(deployer.provider)
 
@@ -48,19 +47,17 @@ module.exports = async (deployer, network, [defaultAccount]) => {
     var operator_cnt = await Operator.deployed()
     await operator_cnt.setAuthorizedSenders(transmit_address ,{from: defaultAccount})
 
-    await deployer.deploy(values, { from: defaultAccount })
-    var values_cnt = await values.deployed()
-    await values_cnt.setA(18)
-    var block = await web3.eth.getBlock("latest")
-
-    await deployer.deploy(manager, DATA_FETCH_COST, OPERATOR, OPERATOR_JOB, LINK_ADDRESS,  { from: defaultAccount })
-    await deployer.deploy(ac, { from: defaultAccount })
- 
+    await deployer.deploy(manager, DATA_FETCH_COST, operator_cnt.address, OPERATOR_JOB, LINK_ADDRESS,  { from: defaultAccount })
     var manager_cnt = await manager.deployed()
+    
+    await deployer.deploy(ac, { from: defaultAccount })
     var ac_cnt = await  ac.deployed()
 
     await ac_cnt.addAccess(manager_cnt.address, { from: defaultAccount })
     await ac_cnt.addAccess(defaultAccount, { from: defaultAccount })
+
+    await deployer.deploy(betDapp, 0, manager_cnt.address, { from: defaultAccount, value: 1000 })
+    var betDapp_cnt = await betDapp.deployed()
 
     await deployer.deploy(ocr, ocr_conf["maximumGasPrice"],ocr_conf["reasonableGasPrice"],ocr_conf["microLinkPerEth"],
     ocr_conf["linkGweiPerObservation"],ocr_conf["linkGweiPerTransmission"],LINK_ADDRESS,ocr_conf["minAnswer"],
@@ -73,15 +70,13 @@ module.exports = async (deployer, network, [defaultAccount]) => {
     await ocr_cnt.setRequestManager(manager_cnt.address, { from: defaultAccount })
     await manager_cnt.setOCRcontract(ocr_cnt.address, { from: defaultAccount })
     await manager_cnt.setMaxReqTime(maxReqTime, { from: defaultAccount })
-    //await manager_cnt.checkValue("a",block.number,values_cnt.address)
-    await link.approve(ocr_cnt.address, "150000000000000000000", { from: defaultAccount })
     await link.approve(manager_cnt.address, "150000000000000000000", { from: defaultAccount })
 
 
-    console.log("values address : ",values_cnt.address)
-    console.log("AC address     : ",ac_cnt.address)
+    console.log("BetDapp address: ",betDapp_cnt.address)
     console.log("manager address: ",manager_cnt.address)
     console.log("OCR address    : ",ocr_cnt.address)
+    console.log("OCR AC address : ",ac_cnt.address)
     console.log("DR address:    : ",operator_cnt.address)
 
   } catch (err) {

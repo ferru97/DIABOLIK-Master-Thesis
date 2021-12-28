@@ -431,7 +431,7 @@ contract OffchainAggregator is Owned, OffchainAggregatorBilling, AggregatorV2V3I
     //////////////////////////////////////////////////
     requesterAddr = _requesterAddr;
     lastTotalLinkDueToOracles = totalLINKDue();
-    fundOCR(maxRequestLinkCost, requesterAddr, address(this));
+    //fundOCR(maxRequestLinkCost, requesterAddr, address(this));
     //////////////////////////////////////////////////
 
     emit RoundRequested(

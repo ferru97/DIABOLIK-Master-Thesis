@@ -48,14 +48,52 @@ contract Filter {
     }
 
 
-    function kek()
+    function kekUINT()
     public
     pure
     returns(uint128)
     {
-        string memory c = "5";
+        uint256 z = 0;
+        string memory num = uint2str(z);
+        bytes16 n = bytes16(keccak256(bytes(num)));
+        uint128 m = uint128(n);
+        return m;
+    }
+
+
+    function kekSTRING()
+    public
+    pure
+    returns(uint128)
+    {
+        string memory c = "0";
         bytes16 n = bytes16(keccak256(bytes(c)));
         uint128 m = uint128(n);
         return m;
+    }
+
+
+    function toBytes(uint256 x) public pure returns (bytes memory b) {
+        b = new bytes(32);
+        assembly { mstore(add(b, 32), x) }
+    }
+
+    function uint2str(uint _i) internal pure returns (string memory _uintAsString) {
+        if (_i == 0) {
+            return "0";
+        }
+        uint j = _i;
+        uint len;
+        while (j != 0) {
+            len++;
+            j /= 10;
+        }
+        bytes memory bstr = new bytes(len);
+        uint k = len - 1;
+        while (_i != 0) {
+            bstr[k--] = byte(uint8(48 + _i % 10));
+            _i /= 10;
+        }
+        return string(bstr);
     }
 }
