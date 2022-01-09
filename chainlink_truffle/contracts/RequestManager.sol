@@ -13,7 +13,7 @@ contract RequestManager is OCRCallbackInterface, ChainlinkClient {
     uint256 public dataFetchLinkCost;
 
     struct Request{
-        //static parameters
+        // static parameters
         ResultCallbackInterface requester;
         uint128 dataHash; //hash of amountDeposited
         uint256 OCRstartTime;
@@ -23,6 +23,7 @@ contract RequestManager is OCRCallbackInterface, ChainlinkClient {
         // application-dependent parameter
         uint256 depositTime;
         uint256 amountDeposited;
+        uint256 linkPayed;
         address payable user;
     }
     
@@ -77,7 +78,7 @@ contract RequestManager is OCRCallbackInterface, ChainlinkClient {
     {
         reqId++;
         lastReqID = reqId;
-        Request memory newRequest = Request(ResultCallbackInterface(msg.sender), 0, 0, 0, 0, address(0), _depositTime, 0, _user);
+        Request memory newRequest = Request(ResultCallbackInterface(msg.sender), 0, 0, 0, 0, address(0), _depositTime, 0, 0, _user);
         requestsQueue[reqId] = newRequest;
         tryNewRound();
         return reqId;
@@ -90,20 +91,23 @@ contract RequestManager is OCRCallbackInterface, ChainlinkClient {
         if( (currReq==0 || requestsQueue[currReq].OCRstartTime+maxReqTime<_now) && firstReqID<lastReqID ){
             firstReqID++;
             currReq = firstReqID;
-            require(link.transferFrom(address(requestsQueue[currReq].requester), address(OCRcontract), OCRcontract.maxRequestLinkCost()), 
+            uint256 OCRcost = OCRcontract.maxRequestLinkCost();
+            require(link.transferFrom(address(requestsQueue[currReq].requester), address(OCRcontract), OCRcost), 
                 "Error: insufficient LINK to fund the OCR job");
+            requestsQueue[currReq].linkPayed = OCRcost;
             requestsQueue[currReq].OCRstartTime = _now;
             OCRcontract.requestNewRound(address(requestsQueue[currReq].requester));
             emit NewRequest(firstReqID);
         }
     }
 
-    function hashCallback(uint64 id, uint128 data) //
+    function hashCallback(uint64 id, uint128 data, uint256 linkRefunded)
     external
     override
     OnlyOCR
     {
        requestsQueue[id].dataHash = data;
+       requestsQueue[currReq].linkPayed -= linkRefunded;
        requestsQueue[id].OCRendTime = block.timestamp;
        requestActualData(id, data); 
        currReq = 0;
@@ -120,6 +124,7 @@ contract RequestManager is OCRCallbackInterface, ChainlinkClient {
         req.add("hash",uint2str(vhash));
         req.add("rid",uint2str(rid));
         sendChainlinkRequest(req, dataFetchLinkCost);
+        requestsQueue[currReq].linkPayed += dataFetchLinkCost;
     }
 
 
@@ -133,7 +138,7 @@ contract RequestManager is OCRCallbackInterface, ChainlinkClient {
         requestsQueue[queueID].amountDeposited = uint(amount);
         requestsQueue[queueID].dataReceivedTime = block.timestamp;
         requestsQueue[queueID].respondingOracle = sender;
-        requestsQueue[queueID].requester.result(requestsQueue[queueID].user, amount);
+        requestsQueue[queueID].requester.result(requestsQueue[queueID].user, amount, requestsQueue[currReq].linkPayed);
         emit DataReceived("New data received", queueID);
     }
 
@@ -166,6 +171,15 @@ contract RequestManager is OCRCallbackInterface, ChainlinkClient {
     returns(int)
     {
         return lastReqID - firstReqID;
+    }
+
+
+    function getMaxRequestLINKCost()
+    public
+    view
+    returns(uint256)
+    {
+        return OCRcontract.maxRequestLinkCost()+dataFetchLinkCost;
     }
 
 

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.7.0;
 
-import "./Operator.sol";
+import "../Operator.sol";
 import "./AuthorizedForwarder.sol";
 
 /**

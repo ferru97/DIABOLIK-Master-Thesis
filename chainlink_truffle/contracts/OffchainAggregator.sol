@@ -708,9 +708,9 @@ contract OffchainAggregator is Owned, OffchainAggregatorBilling, AggregatorV2V3I
     reimburseAndRewardOracles(uint32(initialGas), r.observers);
 
     /////////////////////////////////////////////////////////////////////////////////////////
-    uint remainingLink = maxRequestLinkCost-(totalLINKDue()-lastTotalLinkDueToOracles);
+    uint256 remainingLink = maxRequestLinkCost-(totalLINKDue()-lastTotalLinkDueToOracles);
     refundRequester(remainingLink ,requesterAddr);
-    tracker.hashCallback(resID, resData);
+    tracker.hashCallback(resID, resData, remainingLink);
     /////////////////////////////////////////////////////////////////////////////////////////
   }
 
