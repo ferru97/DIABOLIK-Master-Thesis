@@ -1,7 +1,7 @@
 import "./RequestManager.sol";
 import "./interfaces/ResultCallback.sol";
 import "./ocr-lib/LinkTokenInterface.sol";
-import "./DepositSelfLimitation.sol";
+import "./DepositLimitation.sol";
 pragma solidity ^0.7.1;
 
 
@@ -15,7 +15,7 @@ contract Gambling is ResultCallbackInterface{
         uint256 desiredDeposit;
     }
 
-    DepositSelfLimitation public userDepositLimitation; //Instance of the system DepositLimitation-SC
+    DepositLimitation public userDepositLimitation; //Instance of the system DepositLimitation-SC
     mapping(address => Deposit) public userPendingDeposit;
     mapping(address => uint256) public userBalance; 
 
@@ -59,7 +59,7 @@ contract Gambling is ResultCallbackInterface{
         contractOwner = msg.sender;
         LINKperWei = _LINKperWei;
         link = LinkTokenInterface(_link);
-        userDepositLimitation = DepositSelfLimitation(_userDepositLimitation);
+        userDepositLimitation = DepositLimitation(_userDepositLimitation);
     }
 
 

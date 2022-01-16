@@ -3,7 +3,7 @@ const ocr = artifacts.require("OffchainAggregator")
 const ac = artifacts.require("AccessController")
 const betDapp = artifacts.require('Gambling')
 const Operator = artifacts.require('Operator')
-const DepositLimitation = artifacts.require('DepositSelfLimitation')
+const DepositLimitation = artifacts.require('DepositLimitation')
 const { LinkToken } = require('@chainlink/contracts/truffle/v0.4/LinkToken')
 
 //275046176355070374110092839585164817690

@@ -126,15 +126,15 @@ contract RequestManager is OCRCallbackInterface, ChainlinkClient {
    * @param data Hash of the requested data
    * @param linkRefunded Amount of LINKs OCR-SC has spent to pay the oracles partecipating in the observation
    */
-    function hashCallback(uint64 id, uint128 data, uint256 linkRefunded)
+    function hashCallback(uint64 req_id, uint128 data_hash, uint256 link_payed)
     external
     override
     OnlyOCR
     {
-       requestsQueue[id].dataHash = data;
-       requestsQueue[currReq].linkPayed -= linkRefunded;
-       requestsQueue[id].OCRendTime = block.timestamp;
-       requestActualData(id, data); 
+       requestsQueue[req_id].dataHash = data_hash;
+       requestsQueue[currReq].linkPayed -= link_payed;
+       requestsQueue[req_id].OCRendTime = block.timestamp;
+       requestActualData(req_id, data_hash); 
        currReq = 0;
        tryNewRound();
     }

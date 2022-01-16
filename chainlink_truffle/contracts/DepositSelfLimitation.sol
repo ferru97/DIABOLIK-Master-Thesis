@@ -1,7 +1,7 @@
 pragma solidity ^0.7.1;
 
 
-contract DepositSelfLimitation {
+contract DepositLimitation {
 
     mapping(address => uint256) public depositSelfLimitation; //HashMap that stores for each user its self-limitation
     address[] public gamblingDapps; //List of known gambling Dapps
