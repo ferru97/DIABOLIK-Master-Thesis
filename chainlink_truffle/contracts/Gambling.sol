@@ -9,14 +9,15 @@ contract Gambling is ResultCallbackInterface{
 
     event DepositResult(string message, address user);
 
+    //Struct that represent a pending deposit
     struct Deposit{
         uint256 totalAmountSent;
         uint256 desiredDeposit;
     }
 
-    DepositSelfLimitation public userDepositLimitation;
+    DepositSelfLimitation public userDepositLimitation; //Instance of the system DepositLimitation-SC
     mapping(address => Deposit) public userPendingDeposit;
-    mapping(address => uint256) public userBalance;
+    mapping(address => uint256) public userBalance; 
 
     address public contractOwner;
 
@@ -25,21 +26,31 @@ contract Gambling is ResultCallbackInterface{
     uint256 private dappBalance;
     uint256 private totalUsersBalance;
 
-    LinkTokenInterface public link;
-    uint256 public LINKperWei;
+    LinkTokenInterface public link; //instance of the contract managing the LINK token
+    uint256 public LINKperWei; //How much LINKs are worth 1 Wei. Used for the LINK/ETH conversion
 
     uint256 public called = 0;
 
+
+    /**
+   * @notice Modifier usd to allow access to functions only to teh contract owner identifyed by contractOwner
+   */
     modifier onlyOwner(){
         require(msg.sender == contractOwner, "Only the owner of the contract can access this function");
         _;
     }
+
+    /**
+   * @notice Modifier usd to allow access to functions only to ReqManager-SC contract
+   */
     modifier onlyRequestManager(){
         require(msg.sender == address(requestManager), "Only the RequestManager-SC can access this function");
         _;
     }
 
-
+    /**
+   * @notice Smart contract constructor
+   */
     constructor(address _requestManager, uint256 _LINKperWei, address _link, address _userDepositLimitation)
     payable
     {
@@ -53,7 +64,7 @@ contract Gambling is ResultCallbackInterface{
 
 
     /**
-     * @notice Initialize the deposit process
+     * @notice Initialize the deposit process, called by users who wants to deposit funds to play
      * @param depositAmount amount of ETH the user wonts to add to his/her balance. Expressed in Wei
      */
     function deposit(uint256 depositAmount)
@@ -86,7 +97,7 @@ contract Gambling is ResultCallbackInterface{
         uint256 depositFee = totalLinkPayed / LINKperWei;
         if(depositFee < userPendingDeposit[user].totalAmountSent){
             userPendingDeposit[user].totalAmountSent -= totalLinkPayed;
-            uint256 userMaxMountlyDeposit = userDepositLimitation.getSelfMonthlyLimitation(user);
+            uint256 userMaxMountlyDeposit = userDepositLimitation.getMonthlySelfLimitation(user);
             if(amountDeposited+userPendingDeposit[user].desiredDeposit <= userMaxMountlyDeposit){
                 userBalance[user] += userPendingDeposit[user].desiredDeposit;
                 userPendingDeposit[user].desiredDeposit = 0;
@@ -148,8 +159,33 @@ contract Gambling is ResultCallbackInterface{
     }
 
 
+    /**
+   * @notice Function called by the contract owner to add funds and increase the Dapp balance
+   */
+    function fundDapp()
+    public
+    payable
+    onlyOwner
+    {
+        require(msg.value > 0, "You must send some Eth to fund the contract");
+        dappBalance += msg.value;
+    }
 
-    // Setter functions
+
+    /**
+   * @notice Function called by the contract owner to allow ReqManager-SC to spend an amount of its LINKs on its behalf.
+             The LINKs are used to pay the deposit fee.
+     @param amount amount of LINK that the contract owner allows ReqManager-SC to spend on its behalf.
+   */
+    function approveLink(uint amount)
+    public
+    onlyOwner
+    {
+        link.approve(address(requestManager), amount);
+    }
+
+
+    // Get & Set functions
 
     function setRequestManager(address _requestManager)
     public
@@ -165,25 +201,6 @@ contract Gambling is ResultCallbackInterface{
     {
         LINKperWei = _LINKperWei;
     }
-
-
-    function fundDapp()
-    public
-    payable
-    onlyOwner
-    {
-        require(msg.value > 0, "You must send some Eth to fund the contract");
-        dappBalance += msg.value;
-    }
-
-
-    function approveLink(uint amount)
-    public
-    onlyOwner
-    {
-        link.approve(address(requestManager), amount);
-    }
-
 
     function getMaxRequestETHCost()
     public
@@ -202,7 +219,9 @@ contract Gambling is ResultCallbackInterface{
     }
     
 
-    // Random function used by Fomo3D
+    /**
+   * @notice Function used to generate a random number
+   */
     function rand()
     public
     view

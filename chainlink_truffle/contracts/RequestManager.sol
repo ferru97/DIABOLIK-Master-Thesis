@@ -10,8 +10,8 @@ import "./ocr-lib/LinkTokenInterface.sol";
 contract RequestManager is OCRCallbackInterface, ChainlinkClient {
 
     using Chainlink for Chainlink.Request;
-    uint256 public dataFetchLinkCost;
 
+    // Struct representing a request
     struct Request{
         // static parameters
         ResultCallbackInterface requester;
@@ -20,46 +20,54 @@ contract RequestManager is OCRCallbackInterface, ChainlinkClient {
         uint256 OCRendTime;
         uint256 dataReceivedTime;
         address respondingOracle;
+        uint256 linkPayed;
         // application-dependent parameter
         uint256 depositTime;
-        uint256 amountDeposited;
-        uint256 linkPayed;
+        uint256 amountDeposited;//result of the request
         address payable user;
     }
     
-    event NewRequest(uint64 rId);
-    event DataReceived(string msg, uint64 roundID);
+
+    event NewRequest(uint64 rId); //event emitted when OCR-SC start satisfying a new request
+    event DataReceived(string msg, uint64 roundID); // event emitted when DR-SC returns a result
   
+    //state variables used to manage the requests queue
     uint64 public reqId = 0;
     mapping(uint64 => Request) public requestsQueue;
     uint64 private firstReqID = 0;
     uint64 private lastReqID = 0;
-
-
     uint256 public maxReqTime;
     uint64 public currReq = 0;
+   
+    bytes32 public jobID; //jobID related to the work of hypo DR implemented by the oracles
+    uint256 public dataFetchLinkCost; //cost in LINk of the DR job that provides the actual data given the hash
+    address public DRcontract; //address of the system DR-SC contract
+    OffchainAggregator public OCRcontract; //instance of the system OCR-SC contract
+    LinkTokenInterface public link; //instance of the contact amangeing the LINK token
 
-    bytes32 public jobID;
-    address public DRcontract;
-    OffchainAggregator public OCRcontract;
-    LinkTokenInterface public link;
 
-
+    /**
+   * @notice Modifier usd to allow access to functions only to OCR-SC contract
+   */
     modifier OnlyOCR() {
         require(msg.sender==address(OCRcontract), "Only the OCR contract can access this function");
         _;
     }
 
-     modifier OnlyDR() {
+    /**
+   * @notice Modifier usd to allow access to functions only to DR-SC contract
+   */
+    modifier OnlyDR() {
         require(msg.sender==address(DRcontract), "Only the DR contract can access this function");
         _;
     }
 
-    /*
-   * @param _dataFetchLinkCost cost of requesting the corresponding data of a given hash 
-   * @param _DRcontract address of the Operator.sol contract used to request data on a given hash 
-   * @param _jobID jonID specified on the oracle to interact vith the Operator.sol
-   * @param _link link token address
+    /**
+   * @notice Smart contract constructor 
+   * @param _dataFetchLinkCost Cost of requesting the corresponding data of a given hash 
+   * @param _DRcontract Address of the Operator.sol contract used to request data on a given hash 
+   * @param _jobID JobID specified on the oracle to interact vith the Operator.sol
+   * @param _link Link token address
    */
     constructor (uint256 _dataFetchLinkCost, address _DRcontract, bytes32 _jobID, address _link)
     {
@@ -72,6 +80,12 @@ contract RequestManager is OCRCallbackInterface, ChainlinkClient {
     }
 
 
+    /**
+   * @notice Function called to request a new observation, i.e., to know, given a user address,
+   *         how much s/he has spent in gambling Dapps in the last _depositTime seconds
+   * @param _depositTime Observation period, usually set at 2592000 which are the seconds that make up a month
+   * @param _user User address on which observation is requested
+   */
     function makeObservation(uint256 _depositTime, address payable _user)
     public
     returns(uint64)
@@ -84,6 +98,10 @@ contract RequestManager is OCRCallbackInterface, ChainlinkClient {
         return reqId;
     }
 
+
+    /**
+   * @notice Function called to check if OCR-SC is OCR-SC is available to satisfy a new request, and if it is, notify it of it
+   */
     function tryNewRound()
     public
     {
@@ -101,6 +119,13 @@ contract RequestManager is OCRCallbackInterface, ChainlinkClient {
         }
     }
 
+
+    /**
+   * @notice callback Function called by OCR-SC to return the hash of the requested data
+   * @param id Request id to which the hash refers
+   * @param data Hash of the requested data
+   * @param linkRefunded Amount of LINKs OCR-SC has spent to pay the oracles partecipating in the observation
+   */
     function hashCallback(uint64 id, uint128 data, uint256 linkRefunded)
     external
     override
@@ -115,6 +140,11 @@ contract RequestManager is OCRCallbackInterface, ChainlinkClient {
     }
 
 
+    /**
+   * @notice Callback Function called to request the actual data given the data hash returned by OCR-SC
+   * @param id Request to which the hash refers
+   * @param vhash Data hash previously returned by OCR-SC
+   */
     function requestActualData(uint64 rid, uint128 vhash) 
     internal
     {
@@ -128,6 +158,13 @@ contract RequestManager is OCRCallbackInterface, ChainlinkClient {
     }
 
 
+    /**
+   * @notice Callback Function called by DR-SC to return the actual requested data
+   * @param requestID Request id internal to DR-SC, not useful
+   * @param amount Amount spent by the user related to the request requestQueue[queueID]
+   * @param sender Address of the oracle that satisfied the request
+   * @param queueID Request id in the requestQueue to which the result refers
+   */
     function dataCallback(bytes32 requestID, uint256 amount, address sender, uint64 queueID) 
     public
     OnlyDR
@@ -141,6 +178,9 @@ contract RequestManager is OCRCallbackInterface, ChainlinkClient {
         requestsQueue[queueID].requester.result(requestsQueue[queueID].user, amount, requestsQueue[currReq].linkPayed);
         emit DataReceived("New data received", queueID);
     }
+
+
+    // A serie of get & set functions
 
     function getRequest(uint64 _reqID)
     public
@@ -185,11 +225,21 @@ contract RequestManager is OCRCallbackInterface, ChainlinkClient {
 
 
     // Utility Functions
+
+    /**
+   * @notice Function used to convert a unit to bytes
+   * @param x uint number to convert to bytes
+   */
     function toBytes(uint256 x) internal returns (bytes memory b) {
         b = new bytes(32);
         assembly { mstore(add(b, 32), x) }
     }
 
+
+    /**
+   * @notice Function used to convert a unit to string
+   * @param x uint number to convert to string
+   */
     function uint2str(uint _i) internal pure returns (string memory _uintAsString) {
         if (_i == 0) {
             return "0";
