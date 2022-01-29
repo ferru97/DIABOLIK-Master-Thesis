@@ -1,6 +1,5 @@
 const express = require('express');
 const keccak256 = require('keccak256')
-var hexToBinary = require('hex-to-binary');
 const bodyParser = require('body-parser');
 const cors = require('cors');
 const { log, ExpressAPILogMiddleware } = require('@rama41222/node-logger');
@@ -19,15 +18,16 @@ app.use(bodyParser.json());
 app.use(cors());
 app.use(ExpressAPILogMiddleware(logger, { request: false }));
 
-let oraclesValues = new Map(); //<rid,Map<oid,value>>
-let gambling_sc_list = ["0x838aCD0f3Fbf6C5F4d994A6870a2a28afaC63F98", "0x7E836AF68696ACe5509dC3B218081befcD6114B4"];
+let oraclesSavedData = new Map(); //<rid,Map<oid,value>>
+
+
 
 
 function saveOracleData(oid, rid, value){
-    if(oraclesValues[rid]==undefined)
-        oraclesValues[rid] = new Map()
+    if(oraclesSavedData[rid]==undefined)
+        oraclesSavedData[rid] = new Map()
 
-    var round_data = oraclesValues[rid]
+    var round_data = oraclesSavedData[rid]
     round_data[oid] = value
     console.log("Value saved for oracle ", oid)
 }
@@ -37,6 +37,7 @@ function saveOracleData(oid, rid, value){
 app.get('/getDataHash', (req, res) => {
     req_manager = req.query.reqmanager
     oid = req.query.oid
+    depositlimitation_sc = req.query.depositlimitation
     fraudolent = req.query.fraudolent
 
     if(fraudolent=="y"){
@@ -45,27 +46,16 @@ app.get('/getDataHash', (req, res) => {
         return
     }
 
-    if(req_manager==undefined || oid==undefined){
+    if(req_manager==undefined || oid==undefined || depositlimitation_sc==undefined){
         res.status(404).send('Error 1: incorrect parameters!');
         return
     }
 
-    bc.getDataHash(req_manager, res, saveOracleData, oid, gambling_sc_list)
+    bc.getDataHash(req_manager, res, saveOracleData, oid, depositlimitation_sc)
 });
 
 
 app.post('/getSavedData', (req, res)=>{
-
-    /*var hash = keccak256("5").toString('hex')
-    var bn = BigInt('0x' + hash.substring(0,32));
-    if(bn==req.body.hash){
-        console.log("Oracele "+req.body.oid)
-        console.log("RID "+req.body.rid)
-        res.status(200).send("5");
-    }
-    else 
-        console.log("Error aaaaa")
-    return*/
 
     hash = req.body.hash
     oid = req.body.oid
@@ -74,11 +64,11 @@ app.post('/getSavedData', (req, res)=>{
         res.status(404).send('Error 4: incorrect parameters');
         return
     }
-    if((oraclesValues[rid])[oid]==undefined){
+    if((oraclesSavedData[rid])[oid]==undefined){
         res.status(404).send('Error 5: value not set');
         return
     }
-    val = (oraclesValues[rid])[oid].toString();
+    val = (oraclesSavedData[rid])[oid].toString();
     var val_hash = keccak256(val).toString('hex')
     var bn = BigInt('0x' + val_hash.substring(0,32));
     if(bn.toString() == hash)
@@ -89,17 +79,8 @@ app.post('/getSavedData', (req, res)=>{
 })
 
 
-app.post('/set-gambling-sc-list', (req, res)=>{
-    if(req.body.sc_list != undefined){
-        gambling_sc_list = req.body.sc_list
-        res.status(200).send("ok")
-    }else{
-        res.status(200).send("Error: gambling smart contracts list not provided")
-    }
-})
-
-app.get('/get-gambling-sc-list', (req, res)=>{
-    res.status(200).send(gambling_sc_list.toString())
+app.get('/centralizedTest', (req, res)=>{
+    res.status(200).send("10");
 })
 
 

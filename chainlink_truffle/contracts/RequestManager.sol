@@ -15,7 +15,7 @@ contract RequestManager is OCRCallbackInterface, ChainlinkClient {
     struct Request{
         // static parameters
         ResultCallbackInterface requester;
-        uint128 dataHash; //hash of amountDeposited
+        uint128 dataHash; //hash of amount deposited provided by OCR-SC
         uint256 OCRstartTime;
         uint256 OCRendTime;
         uint256 dataReceivedTime;
@@ -23,7 +23,7 @@ contract RequestManager is OCRCallbackInterface, ChainlinkClient {
         uint256 linkPayed;
         // application-dependent parameter
         uint256 depositTime;
-        uint256 amountDeposited;//result of the request
+        uint256 amountDeposited;//actual amount deposited provided by DR-SC
         address payable user;
     }
     
@@ -122,9 +122,9 @@ contract RequestManager is OCRCallbackInterface, ChainlinkClient {
 
     /**
    * @notice callback Function called by OCR-SC to return the hash of the requested data
-   * @param id Request id to which the hash refers
-   * @param data Hash of the requested data
-   * @param linkRefunded Amount of LINKs OCR-SC has spent to pay the oracles partecipating in the observation
+   * @param req_id Request id to which the hash refers
+   * @param data_hash Hash of the requested data
+   * @param link_payed Amount of LINKs OCR-SC has spent to pay the oracles partecipating in the observation
    */
     function hashCallback(uint64 req_id, uint128 data_hash, uint256 link_payed)
     external
@@ -142,17 +142,17 @@ contract RequestManager is OCRCallbackInterface, ChainlinkClient {
 
     /**
    * @notice Callback Function called to request the actual data given the data hash returned by OCR-SC
-   * @param id Request to which the hash refers
-   * @param vhash Data hash previously returned by OCR-SC
+   * @param req_id Request to which the hash refers
+   * @param data_hash Data hash previously returned by OCR-SC
    */
-    function requestActualData(uint64 rid, uint128 vhash) 
+    function requestActualData(uint64 req_id, uint128 data_hash) 
     internal
     {
-        require(link.transferFrom(address(requestsQueue[rid].requester), address(this), dataFetchLinkCost), 
+        require(link.transferFrom(address(requestsQueue[req_id].requester), address(this), dataFetchLinkCost), 
             "Error: insufficient LINK to fund the Direct Request job");
         Chainlink.Request memory req = buildChainlinkRequest(jobID, address(this), this.dataCallback.selector);
-        req.add("hash",uint2str(vhash));
-        req.add("rid",uint2str(rid));
+        req.add("hash",uint2str(data_hash));
+        req.add("rid",uint2str(req_id));
         sendChainlinkRequest(req, dataFetchLinkCost);
         requestsQueue[currReq].linkPayed += dataFetchLinkCost;
     }
@@ -238,7 +238,7 @@ contract RequestManager is OCRCallbackInterface, ChainlinkClient {
 
     /**
    * @notice Function used to convert a unit to string
-   * @param x uint number to convert to string
+   * @param _i uint number to convert to string
    */
     function uint2str(uint _i) internal pure returns (string memory _uintAsString) {
         if (_i == 0) {

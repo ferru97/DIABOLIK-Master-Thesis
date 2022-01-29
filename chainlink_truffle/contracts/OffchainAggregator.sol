@@ -709,7 +709,8 @@ contract OffchainAggregator is Owned, OffchainAggregatorBilling, AggregatorV2V3I
 
     /////////////////////////////////////////////////////////////////////////////////////////
     uint256 linkPayed = totalLINKDue()-lastTotalLinkDueToOracles;
-    refundRequester(maxRequestLinkCost-linkPayed ,requesterAddr);
+    if(linkPayed<maxRequestLinkCost)
+      refundRequester(maxRequestLinkCost-linkPayed ,requesterAddr);
     tracker.hashCallback(resID, resData, linkPayed);
     /////////////////////////////////////////////////////////////////////////////////////////
   }
